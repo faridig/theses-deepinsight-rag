@@ -1,0 +1,5 @@
+llama-index
+ragas
+arize-phoenix
+pytest
+python-dotenv
