@@ -2,13 +2,19 @@ import os
 from typing import List, Optional
 import nest_asyncio
 from llama_parse import LlamaParse
-from llama_index.core import StorageContext, Document
+from llama_index.core import StorageContext, Document, Settings
+from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.node_parser import SentenceWindowNodeParser
 from llama_index.core.schema import BaseNode
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Configure Global Settings for OpenAI
+Settings.llm = OpenAI(model="gpt-4o")
+Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
 
 # Apply nest_asyncio for async operations in environments that need it
 nest_asyncio.apply()
