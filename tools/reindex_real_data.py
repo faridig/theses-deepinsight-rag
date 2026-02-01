@@ -43,41 +43,43 @@ def reindex_real_data():
 
     logger.info(f"Fichiers trouvés pour indexation : {[f.name for f in pdf_files]}")
 
+    from src.ingestion.theses_client import ThesesClient
+    theses_client = ThesesClient()
+
     all_nodes = []
     
-    # Métadonnées manuelles pour la démo basées sur les fichiers connus
-    # Dans un flux complet, elles viendraient du search API, ici on les mappe par ID de fichier
-    meta_map = {
-        "2023STRAB011": {
-            "titre": "L’apport de l’intelligence artificielle à la recherche en économie : trois essais sur la science des données et l’innovation",
-            "auteur": "Pierre Pelletier",
-            "date": "2023",
-            "discipline": "Sciences économiques"
-        },
-        "2024STRAB004": {
-            "titre": "Inférence causale et apprentissage automatique pour l'évaluation des politiques publiques",
-            "auteur": "Diletta Abbonato",
-            "date": "2024",
-            "discipline": "Sciences économiques"
-        }
-    }
-
     for pdf_path in pdf_files:
         thesis_id = pdf_path.stem
+        logger.info(f"Traitement de {thesis_id}...")
+        
+        # Récupération dynamique des métadonnées
+        metadata = {"titre": "Thèse Inconnue", "auteur": "Inconnu", "date": "N/A", "discipline": "N/A"}
+        try:
+            search_results = theses_client.search(thesis_id)
+            if search_results:
+                res = search_results[0]
+                metadata["titre"] = res.get("titre", metadata["titre"])
+                metadata["auteur"] = ", ".join(res.get("auteurs", [metadata["auteur"]]))
+                metadata["date"] = res.get("dateSoutenance", metadata["date"])
+                metadata["discipline"] = res.get("discipline", metadata["discipline"])
+                logger.info(f"Métadonnées récupérées pour {thesis_id} : {metadata['auteur']} - {metadata['titre']}")
+            else:
+                logger.warning(f"Aucune métadonnée trouvée pour {thesis_id}")
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des métadonnées pour {thesis_id} : {e}")
+
         logger.info(f"Parsing réel de {pdf_path.name}...")
         try:
-            # On parse les 10 premières pages (is_dev=True)
+            # On parse les 10 premières pages (is_dev=True) pour le hotfix
             nodes = parser.parse_pdf(str(pdf_path), is_dev=True)
-            
-            metadata = meta_map.get(thesis_id, {"titre": "Thèse Inconnue", "auteur": "Inconnu"})
             
             for node in nodes:
                 node.metadata.update({
                     "id": thesis_id,
                     "titre": metadata["titre"],
                     "auteur": metadata["auteur"],
-                    "date": metadata.get("date", "N/A"),
-                    "discipline": metadata.get("discipline", "N/A")
+                    "date": metadata["date"],
+                    "discipline": metadata["discipline"]
                 })
             
             all_nodes.extend(nodes)
