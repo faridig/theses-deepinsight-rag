@@ -1,7 +1,8 @@
 import os
 import chromadb
-from llama_index.core import StorageContext, VectorStoreIndex
+from llama_index.core import StorageContext, VectorStoreIndex, Settings
 from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.embeddings.openai import OpenAIEmbedding
 from typing import List, Optional, Sequence
 from llama_index.core.schema import BaseNode
 
@@ -10,6 +11,16 @@ class VectorService:
     Service for managing vector indexing and retrieval using ChromaDB and LlamaIndex.
     """
     def __init__(self, storage_path: str = "./storage/chroma", collection_name: str = "theses_collection"):
+        # Configuration par défaut si non définie (évite d'écraser les mocks de test)
+        try:
+            from llama_index.core.embeddings import MockEmbedding
+            is_mock = isinstance(Settings.embed_model, MockEmbedding)
+        except ImportError:
+            is_mock = False
+
+        if not is_mock:
+            Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+        
         self.storage_path = storage_path
         self.collection_name = collection_name
         
