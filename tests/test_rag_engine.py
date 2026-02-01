@@ -1,14 +1,12 @@
 import pytest
 from unittest.mock import MagicMock, patch
+from src.generation.rag_engine import RAGEngine
 from llama_index.core.base.response.schema import Response
 from llama_index.core.llms.mock import MockLLM
 from llama_index.core.schema import QueryBundle
 
-# Patch Phoenix at module level before importing src.generation.rag_engine
-with patch('phoenix.launch_app'), patch('llama_index.core.set_global_handler'):
-    from src.generation.rag_engine import RAGEngine
-
 class TestRAGEngine:
+
     @patch('src.generation.rag_engine.VectorService')
     @patch('src.generation.rag_engine.OpenAI')
     def test_rag_engine_initialization(self, mock_openai, mock_vector_service):

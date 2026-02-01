@@ -1,12 +1,6 @@
 import os
 import logging
-import phoenix as px
-from llama_index.core import set_global_handler
 from dotenv import load_dotenv
-
-# Configuration de l'instrumentation Phoenix AVANT tout autre composant LlamaIndex
-px.launch_app()
-set_global_handler("arize_phoenix")
 
 from llama_index.core import (
     Settings,

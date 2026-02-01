@@ -3,9 +3,18 @@ import sys
 import phoenix as px
 from llama_index.core import set_global_handler
 
-# Configuration de l'instrumentation Phoenix AVANT tout autre composant LlamaIndex
-px.launch_app()
-set_global_handler("arize_phoenix")
+# Configuration robuste de l'instrumentation Phoenix
+try:
+    # Lancement du serveur Phoenix (gère les appels multiples en interne ou via exception)
+    px.launch_app()
+    set_global_handler("arize_phoenix")
+    print("✅ Observabilité Phoenix activée (http://localhost:6006)")
+except Exception as e:
+    # Si Phoenix est déjà lancé ou une erreur survient, on continue gracieusement
+    if "Failed to bind to address" in str(e):
+        print("ℹ️ Phoenix est déjà actif sur le port 4317.")
+    else:
+        print(f"⚠️ Note: Erreur lors de l'initialisation de Phoenix : {e}")
 
 from src.generation.rag_engine import RAGEngine
 
@@ -36,17 +45,22 @@ def main():
         response = engine.ask(question)
         
         print("\n--- RÉPONSE ---")
-        print(response)
+        # str(response) fonctionne pour Response et les chaînes d'erreur
+        print(str(response))
         print("----------------\n")
         
         # Affichage des sources si disponibles
-        if hasattr(response, 'source_nodes') and response.source_nodes:
+        source_nodes = getattr(response, 'source_nodes', None)
+        if source_nodes:
             print("Sources utilisées :")
-            for i, node in enumerate(response.source_nodes):
+            for i, node in enumerate(source_nodes):
                 title = node.metadata.get('titre', 'Inconnu')
                 author = node.metadata.get('auteur', 'Inconnu')
-                score = node.score if hasattr(node, 'score') else "N/A"
-                print(f"[{i+1}] {title} - {author} (Score: {score:.2f})")
+                score = getattr(node, 'score', "N/A")
+                if isinstance(score, float):
+                    print(f"[{i+1}] {title} - {author} (Score: {score:.2f})")
+                else:
+                    print(f"[{i+1}] {title} - {author} (Score: {score})")
 
 if __name__ == "__main__":
     main()
