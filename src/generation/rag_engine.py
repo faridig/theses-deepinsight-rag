@@ -6,6 +6,7 @@ from llama_index.core import (
     PromptTemplate,
 )
 from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor, SimilarityPostprocessor
 from src.indexing.vector_service import VectorService
 
@@ -20,11 +21,12 @@ class RAGEngine:
     Moteur RAG pour interroger les thèses avec Sentence Window Retrieval.
     """
     def __init__(self, storage_path: str = "./storage/chroma", collection_name: str = "theses_collection"):
-        # 1. Configuration du LLM
+        # 1. Configuration du LLM et de l'Embedding
         if not os.getenv("OPENAI_API_KEY"):
             logger.warning("OPENAI_API_KEY non trouvée dans l'environnement.")
         
         Settings.llm = OpenAI(model="gpt-4o-mini")
+        Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
         
         # 2. Chargement de l'index via VectorService
         try:
@@ -41,10 +43,10 @@ class RAGEngine:
 
         # 3. Pipeline de Post-Processing (CRITIQUE)
         # MetadataReplacementPostProcessor remplace le nœud par sa fenêtre de contexte
-        # SimilarityPostprocessor filtre les nœuds avec un score trop bas
+        # SimilarityPostprocessor désactivé pour la démonstration afin de garantir des réponses
         self.post_processors = [
             MetadataReplacementPostProcessor(target_metadata_key="window"),
-            SimilarityPostprocessor(similarity_cutoff=0.7)
+            # SimilarityPostprocessor(similarity_cutoff=0.4)  # Désactivé pour démo
         ]
 
         # 4. Prompt Engineering (Français, Formel)
