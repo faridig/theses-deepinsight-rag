@@ -3,3 +3,5 @@ ragas
 arize-phoenix
 pytest
 python-dotenv
+httpx
+ruff
