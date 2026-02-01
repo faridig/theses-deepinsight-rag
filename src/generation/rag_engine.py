@@ -1,6 +1,13 @@
 import os
 import logging
+import phoenix as px
+from llama_index.core import set_global_handler
 from dotenv import load_dotenv
+
+# Configuration de l'instrumentation Phoenix AVANT tout autre composant LlamaIndex
+px.launch_app()
+set_global_handler("arize_phoenix")
+
 from llama_index.core import (
     Settings,
     PromptTemplate,
@@ -8,6 +15,8 @@ from llama_index.core import (
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor, SimilarityPostprocessor
+from llama_index.core.indices.query.query_transform import HyDEQueryTransform
+from llama_index.core.query_engine import TransformQueryEngine
 from src.indexing.vector_service import VectorService
 
 # Configuration des logs
@@ -65,17 +74,21 @@ class RAGEngine:
         )
         self.qa_prompt_tmpl = PromptTemplate(self.qa_prompt_tmpl_str)
 
-        # 5. Assemblage du Query Engine
-        self.query_engine = self.index.as_query_engine(
+        # 5. Assemblage du Query Engine de base
+        self.base_query_engine = self.index.as_query_engine(
             node_postprocessors=self.post_processors,
             similarity_top_k=5
         )
         
         # Mise à jour du prompt de base
-        self.query_engine.update_prompts(
+        self.base_query_engine.update_prompts(
             {"response_synthesizer:text_qa_template": self.qa_prompt_tmpl}
         )
 
+        # 6. Transformation HyDE (Intelligence Augmentée)
+        self.hyde = HyDEQueryTransform(include_original=True)
+        self.query_engine = TransformQueryEngine(self.base_query_engine, self.hyde)
+        
     def ask(self, question: str):
         """
         Exécute une requête RAG et retourne la réponse.

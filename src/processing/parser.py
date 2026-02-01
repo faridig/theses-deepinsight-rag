@@ -59,6 +59,8 @@ class ThesisParser:
             "api_key": self.api_key,
             "result_type": "markdown",
             "verbose": True,
+            "use_vendor_multimodal_model": True,
+            "vendor_multimodal_model_name": "openai-gpt4o",
         }
         
         if is_dev:

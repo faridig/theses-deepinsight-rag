@@ -1,40 +1,31 @@
-# Sprint Plan 0 - Infrastructure & CI/CD
+# Sprint Plan 5 - Observabilité, Intelligence HyDE & Multimodalité
 
-**ID :** PBI-000  
-**Objectif :** Établir une base de développement saine, sécurisée et automatisée (DevOps First).
+**ID :** PBI-005, PBI-006 & PBI-007  
+**Objectif :** Déployer une infrastructure d'observabilité pour piloter l'optimisation du RAG (HyDE) et débloquer l'analyse multimodale des documents complexes.
 
 ## Tâches à réaliser (Lead-Dev)
 
-### 1. Initialisation Git
-- [ ] Initialiser le dépôt local.
-- [ ] Créer un fichier `.gitignore` complet (Python standard + `.opencode`, `.env`, `__pycache__`, `venv/`).
-- [ ] Créer un dépôt distant sur GitHub (si accès configuré).
+### 1. Observabilité Critique (PBI-005 - PRIORITÉ 1)
+- [ ] Installer `arize-phoenix` et `openinference-instrumentation-llama-index`.
+- [ ] Initialiser le serveur Phoenix au démarrage de l'application (`px.launch_app()`).
+- [ ] Configurer l'instrumentation globale via `set_global_handler("arize_phoenix")`.
+- [ ] **CA-O :** Vérifier que chaque requête RAG génère une trace complète visible sur l'interface (Retriever -> Post-Processor -> LLM).
 
-### 2. Environnement de Développement
-- [ ] Créer l'environnement virtuel Python (`python -m venv venv`).
-- [ ] Initialiser `requirements.txt` avec les dépendances de base :
-    - `llama-index`
-    - `ragas`
-    - `arize-phoenix`
-    - `pytest`
-    - `python-dotenv`
+### 2. Optimisation HyDE (PBI-006 - PRIORITÉ 2)
+- [ ] Implémenter `HyDEQueryTransform` dans le module `src/generation/rag_engine.py`.
+- [ ] Envelopper le moteur de réponse dans un `TransformQueryEngine`.
+- [ ] **Validation visuelle :** Utiliser Phoenix pour comparer la requête originale et la réponse hypothétique générée par HyDE.
 
-### 3. Automatisation CI/CD
-- [ ] Configurer une GitHub Action (`.github/workflows/main.yml`) pour :
-    - Vérification du linting (flake8 ou black).
-    - Exécution des tests unitaires (pytest).
-
-### 4. Structure du Projet
-- [ ] Créer l'arborescence :
-    - `src/` (code source)
-    - `tests/` (tests unitaires et intégration)
-    - `data/` (stockage local temporaire, ignoré par git)
+### 3. Ingestion Multimodale Premium (PBI-007 - PRIORITÉ 3)
+- [ ] Mettre à jour `src/ingestion/parser.py` pour configurer `LlamaParse` en mode Premium.
+- [ ] Activer les options : `result_type="markdown"`, `use_vendor_multimodal_model=True`, `vendor_multimodal_model_name="gpt-4o"`.
+- [ ] Ré-indexer une thèse contenant des tableaux denses et des schémas pour valider l'extraction de données structurées.
 
 ## Critères d'Acceptation (CA)
-- **CA-1** : `git status` ne montre aucun fichier sensible ou inutile (grâce au `.gitignore`).
-- **CA-2** : L'environnement virtuel est activable et les dépendances s'installent sans erreur.
-- **CA-3** : Le pipeline CI/CD se déclenche lors d'un push (si repo distant).
-- **CA-4** : Aucune fonctionnalité métier (PBI-001+) n'est entamée durant ce sprint.
+- **CA-1 (Phoenix)** : Toutes les étapes de la chaîne RAG (notamment la transformation HyDE) sont traçables visuellement dans Phoenix.
+- **CA-2 (HyDE)** : Le système démontre une meilleure robustesse face aux questions floues grâce à la génération du document hypothétique.
+- **CA-3 (Multimodal)** : Le parser identifie et transcrit les tableaux complexes en format Markdown exploitable par le LLM.
+- **CA-4 (Sources)** : Les citations de sources restent précises et incluent le contexte étendu (Sentence Window).
 
 ---
-**STATUT : PRÊT POUR EXÉCUTION**
+**STATUT : PRIORITÉ ÉLEVÉE - PRÊT POUR EXÉCUTION**

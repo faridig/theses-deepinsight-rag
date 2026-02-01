@@ -1,5 +1,12 @@
 import os
 import sys
+import phoenix as px
+from llama_index.core import set_global_handler
+
+# Configuration de l'instrumentation Phoenix AVANT tout autre composant LlamaIndex
+px.launch_app()
+set_global_handler("arize_phoenix")
+
 from src.generation.rag_engine import RAGEngine
 
 def main():
