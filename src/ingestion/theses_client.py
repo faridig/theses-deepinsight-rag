@@ -23,7 +23,7 @@ class ThesesClient:
         Args:
             data_dir (str): Directory to save downloaded PDFs. Defaults to "data".
         """
-        self.base_url = "https://www.theses.fr/api/v1/theses/recherche/"
+        self.base_url = "https://theses.fr/api/v1/theses/recherche/"
         self.user_agent = "ThesesInsightBot/1.0"
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
@@ -46,22 +46,28 @@ class ThesesClient:
         }
         
         try:
-            with httpx.Client(headers=self.headers, timeout=10.0) as client:
+            # Added follow_redirects=True as per mission correction
+            with httpx.Client(headers=self.headers, timeout=10.0, follow_redirects=True) as client:
                 response = client.get(self.base_url, params=params)
                 response.raise_for_status()
                 data = response.json()
                 
-                docs = data.get("response", {}).get("docs", [])
+                # Corrected root key: 'theses' instead of 'response/docs'
+                theses_list = data.get("theses", [])
                 results = []
-                for doc in docs:
+                for doc in theses_list:
+                    thesis_id = doc.get("id")
+                    # Deduce PDF URL as it's missing from search JSON
+                    url_document = f"https://theses.fr/{thesis_id}/document" if thesis_id else None
+                    
                     results.append({
-                        "id": doc.get("id"),
-                        "titre": self._extract_first(doc.get("titrePrincipal")),
-                        "auteurs": doc.get("auteurs", []),
+                        "id": thesis_id,
+                        "titre": doc.get("titrePrincipal"),
+                        "auteurs": [f"{a.get('prenom', '')} {a.get('nom', '')}".strip() for a in doc.get("auteurs", [])],
                         "dateSoutenance": doc.get("dateSoutenance"),
-                        "discipline": self._extract_first(doc.get("discipline")),
-                        "resume": self._extract_first(doc.get("resumes")),
-                        "urlDocument": doc.get("urlDocument")
+                        "discipline": doc.get("discipline"),
+                        "resume": None,  # Absent from search API, will be handled in later PBI or detailed fetch
+                        "urlDocument": url_document
                     })
                 return results
         except httpx.HTTPError as e:

@@ -17,31 +17,30 @@ class TestThesesClient(unittest.TestCase):
 
     @patch("httpx.Client.get")
     def test_search_success(self, mock_get):
-        # Mock API response
+        # Mock API response with real structure
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "response": {
-                "docs": [
-                    {
-                        "id": "2023PA010001",
-                        "titrePrincipal": ["Une thèse magnifique"],
-                        "auteurs": ["Jean Dupont"],
-                        "dateSoutenance": "2023-01-01",
-                        "discipline": ["Informatique"],
-                        "resumes": ["Ceci est un résumé."],
-                        "urlDocument": "https://www.theses.fr/2023PA010001/document"
-                    }
-                ]
-            }
+            "totalHits": 1,
+            "theses": [
+                {
+                    "id": "2023STRAB011",
+                    "titrePrincipal": "Artificial intelligence in science : diffusion and impact",
+                    "auteurs": [{"nom": "Pelletier", "prenom": "Pierre"}],
+                    "dateSoutenance": "23/06/2023",
+                    "discipline": "Sciences économiques"
+                }
+            ]
         }
         mock_get.return_value = mock_response
 
         results = self.client.search("AI")
         
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["id"], "2023PA010001")
-        self.assertEqual(results[0]["titre"], "Une thèse magnifique")
+        self.assertEqual(results[0]["id"], "2023STRAB011")
+        self.assertEqual(results[0]["titre"], "Artificial intelligence in science : diffusion and impact")
+        self.assertEqual(results[0]["auteurs"], ["Pierre Pelletier"])
+        self.assertEqual(results[0]["urlDocument"], "https://theses.fr/2023STRAB011/document")
 
     @patch("httpx.Client.get")
     def test_download_pdf_success(self, mock_get):
