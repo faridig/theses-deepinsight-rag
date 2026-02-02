@@ -13,7 +13,7 @@ from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
-from typing import List, Sequence
+from typing import List
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from src.indexing.vector_service import VectorService
 
