@@ -3,7 +3,7 @@ import chromadb
 from llama_index.core import StorageContext, VectorStoreIndex, Settings
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.openai import OpenAIEmbedding
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 from llama_index.core.schema import BaseNode
 
 class VectorService:

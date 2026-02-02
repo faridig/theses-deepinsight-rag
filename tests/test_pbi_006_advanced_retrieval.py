@@ -1,10 +1,6 @@
-import pytest
 import os
 from unittest.mock import MagicMock, patch
 from src.generation.rag_engine import RAGEngine
-from llama_index.core.retrievers import QueryFusionRetriever
-from llama_index.postprocessor.cohere_rerank import CohereRerank
-from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.llms.mock import MockLLM
 
 class TestAdvancedRetrieval:
@@ -24,7 +20,7 @@ class TestAdvancedRetrieval:
             mock_index.as_retriever.return_value = mock_base_retriever
             
             # Initialize engine
-            engine = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")
+            _ = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")
             
             # Assertions for QueryFusionRetriever
             mock_fusion.assert_called_once()
@@ -33,7 +29,8 @@ class TestAdvancedRetrieval:
             assert mock_base_retriever in args[0]
             assert kwargs['num_queries'] == 3
             assert kwargs['similarity_top_k'] == 20
-            assert kwargs['mode'] == "reciprocal_rerank"
+            # mode is an enum
+            assert "RECIPROCAL_RANK" in str(kwargs['mode'])
             assert kwargs['use_async'] is True
             
             # Assertions for CohereRerank

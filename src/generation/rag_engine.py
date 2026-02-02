@@ -10,8 +10,11 @@ from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor
 from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
+from typing import List, Sequence
+from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from src.indexing.vector_service import VectorService
 
 # Configuration des logs
@@ -46,7 +49,7 @@ class RAGEngine:
             raise RuntimeError(f"Impossible d'initialiser le RAGEngine : {e}")
 
         # 3. Pipeline de Post-Processing (CRITIQUE)
-        self.post_processors = [
+        self.post_processors: List[BaseNodePostprocessor] = [
             MetadataReplacementPostProcessor(target_metadata_key="window"),
         ]
 
@@ -84,14 +87,17 @@ class RAGEngine:
             [self.base_retriever],
             similarity_top_k=20,
             num_queries=3,
-            mode="reciprocal_rerank",
+            mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=True,
             verbose=True
         )
 
         # 7. Assemblage du Query Engine final
         # Note: On fusionne les post-processeurs
-        all_post_processors = self.post_processors + [self.reranker]
+        all_post_processors: List[BaseNodePostprocessor] = [
+            *self.post_processors,
+            self.reranker
+        ]
         
         self.query_engine = RetrieverQueryEngine(
             retriever=self.fusion_retriever,

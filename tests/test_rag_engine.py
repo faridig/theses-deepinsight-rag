@@ -1,9 +1,7 @@
-import pytest
 from unittest.mock import MagicMock, patch
 from src.generation.rag_engine import RAGEngine
 from llama_index.core.base.response.schema import Response
 from llama_index.core.llms.mock import MockLLM
-from llama_index.core.schema import QueryBundle
 
 class TestRAGEngine:
 
