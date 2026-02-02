@@ -3,8 +3,10 @@ from unittest.mock import MagicMock, patch
 from src.generation.rag_engine import RAGEngine
 from llama_index.core.base.response.schema import Response
 from llama_index.core.llms.mock import MockLLM
+from llama_index.core.schema import QueryBundle
 
 class TestRAGEngine:
+
     @patch('src.generation.rag_engine.VectorService')
     @patch('src.generation.rag_engine.OpenAI')
     def test_rag_engine_initialization(self, mock_openai, mock_vector_service):
@@ -42,7 +44,12 @@ class TestRAGEngine:
         
         # Assertions
         assert response.response == "Ceci est une réponse de test."
-        mock_query_engine.query.assert_called_with("Quelle est la question ?")
+        # With HyDE, query is called with a QueryBundle
+        args, _ = mock_query_engine.query.call_args
+        if isinstance(args[0], QueryBundle):
+            assert args[0].query_str == "Quelle est la question ?"
+        else:
+            assert args[0] == "Quelle est la question ?"
 
     @patch('src.generation.rag_engine.VectorService')
     @patch('src.generation.rag_engine.OpenAI')

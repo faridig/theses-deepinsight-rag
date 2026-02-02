@@ -1,5 +1,88 @@
 import os
 import sys
+import socket
+import logging
+import phoenix as px
+from llama_index.core import set_global_handler
+
+# 1. Stratégie Radicale : Silence total des logs OpenTelemetry
+logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
+
+def check_port_occupancy(port: int):
+    """
+    Vérifie l'occupation d'un port sur IPv4 et IPv6 et tente un bind check.
+    Retourne un rapport détaillé.
+    """
+    results = {"ipv4": False, "ipv6": False, "bindable": False, "error": None}
+    
+    # Test IPv4
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.1)
+            results["ipv4"] = (s.connect_ex(('127.0.0.1', port)) == 0)
+    except Exception: pass
+
+    # Test IPv6
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
+            s.settimeout(0.1)
+            results["ipv6"] = (s.connect_ex(('::1', port)) == 0)
+    except Exception: pass
+
+    # Bind Check (Vérification de liaison)
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', port))
+            results["bindable"] = True
+    except Exception as e:
+        results["bindable"] = False
+        results["error"] = str(e)
+        
+    return results
+
+def is_phoenix_healthy(port: int = 6006) -> bool:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+# Configuration de l'instrumentation Phoenix
+def setup_observability():
+    if os.getenv("DISABLE_PHOENIX") == "1":
+        print("ℹ️ Observabilité désactivée par DISABLE_PHOENIX=1")
+        return
+
+    try:
+        UI_PORT = 6006
+        GRPC_PORT = 4317
+        
+        # Rapport d'Incident gRPC
+        report = check_port_occupancy(GRPC_PORT)
+        is_occupied = report["ipv4"] or report["ipv6"] or not report["bindable"]
+        
+        if is_occupied:
+            if is_phoenix_healthy(UI_PORT):
+                print(f"ℹ️ Phoenix sain détecté sur le port {GRPC_PORT} (Multi-Stack). Connexion.")
+                set_global_handler("arize_phoenix")
+                return
+            else:
+                print(f"🚨 Incident gRPC Port {GRPC_PORT} : [IPv4:{report['ipv4']}, IPv6:{report['ipv6']}, Bindable:{report['bindable']}]")
+                print(f"Détail : {report['error']}")
+                print("⚠️ Désactivation de l'instrumentation pour éviter tout conflit.")
+                return
+
+        # Tentative de lancement
+        px.launch_app()
+        set_global_handler("arize_phoenix")
+        print("✅ Observabilité Phoenix activée (http://localhost:6006)")
+        
+    except Exception as e:
+        print(f"❌ Observabilité ignorée : {e}")
+
+setup_observability()
+
 from src.generation.rag_engine import RAGEngine
 
 def main():
@@ -29,17 +112,22 @@ def main():
         response = engine.ask(question)
         
         print("\n--- RÉPONSE ---")
-        print(response)
+        # str(response) fonctionne pour Response et les chaînes d'erreur
+        print(str(response))
         print("----------------\n")
         
         # Affichage des sources si disponibles
-        if hasattr(response, 'source_nodes') and response.source_nodes:
+        source_nodes = getattr(response, 'source_nodes', None)
+        if source_nodes:
             print("Sources utilisées :")
-            for i, node in enumerate(response.source_nodes):
+            for i, node in enumerate(source_nodes):
                 title = node.metadata.get('titre', 'Inconnu')
                 author = node.metadata.get('auteur', 'Inconnu')
-                score = node.score if hasattr(node, 'score') else "N/A"
-                print(f"[{i+1}] {title} - {author} (Score: {score:.2f})")
+                score = getattr(node, 'score', "N/A")
+                if isinstance(score, float):
+                    print(f"[{i+1}] {title} - {author} (Score: {score:.2f})")
+                else:
+                    print(f"[{i+1}] {title} - {author} (Score: {score})")
 
 if __name__ == "__main__":
     main()
