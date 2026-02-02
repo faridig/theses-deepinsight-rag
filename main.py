@@ -5,26 +5,51 @@ import logging
 import phoenix as px
 from llama_index.core import set_global_handler
 
-# 1. Stratégie Radicale : Silence total des logs OpenTelemetry pour éviter le spam
+# 1. Stratégie Radicale : Silence total des logs OpenTelemetry
 logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
 
-def is_port_in_use(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', port)) == 0
+def check_port_occupancy(port: int):
+    """
+    Vérifie l'occupation d'un port sur IPv4 et IPv6 et tente un bind check.
+    Retourne un rapport détaillé.
+    """
+    results = {"ipv4": False, "ipv6": False, "bindable": False, "error": None}
+    
+    # Test IPv4
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.1)
+            results["ipv4"] = (s.connect_ex(('127.0.0.1', port)) == 0)
+    except Exception: pass
 
-# 2. Vérification de Santé (Health Check)
+    # Test IPv6
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
+            s.settimeout(0.1)
+            results["ipv6"] = (s.connect_ex(('::1', port)) == 0)
+    except Exception: pass
+
+    # Bind Check (Vérification de liaison)
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', port))
+            results["bindable"] = True
+    except Exception as e:
+        results["bindable"] = False
+        results["error"] = str(e)
+        
+    return results
+
 def is_phoenix_healthy(port: int = 6006) -> bool:
     import urllib.request
     try:
-        # Vérifie que l'UI de Phoenix répond
-        with urllib.request.urlopen(f"http://localhost:{port}/", timeout=1) as response:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1) as response:
             return response.status == 200
     except Exception:
         return False
 
 # Configuration de l'instrumentation Phoenix
 def setup_observability():
-    # 3. Option de désactivation totale via .env
     if os.getenv("DISABLE_PHOENIX") == "1":
         print("ℹ️ Observabilité désactivée par DISABLE_PHOENIX=1")
         return
@@ -33,16 +58,20 @@ def setup_observability():
         UI_PORT = 6006
         GRPC_PORT = 4317
         
-        # Mode Headless : Vérification de santé avant connexion
-        if is_port_in_use(GRPC_PORT) and is_phoenix_healthy(UI_PORT):
-            print(f"ℹ️ Phoenix sain détecté sur le port {GRPC_PORT}. Connexion à l'instance existante.")
-            set_global_handler("arize_phoenix")
-            return
-
-        # Si ports occupés mais service non sain, on abandonne pour éviter les erreurs
-        if is_port_in_use(GRPC_PORT) or is_port_in_use(UI_PORT):
-            print("⚠️ Ports Phoenix occupés mais service non répondant. Instrumentation ignorée.")
-            return
+        # Rapport d'Incident gRPC
+        report = check_port_occupancy(GRPC_PORT)
+        is_occupied = report["ipv4"] or report["ipv6"] or not report["bindable"]
+        
+        if is_occupied:
+            if is_phoenix_healthy(UI_PORT):
+                print(f"ℹ️ Phoenix sain détecté sur le port {GRPC_PORT} (Multi-Stack). Connexion.")
+                set_global_handler("arize_phoenix")
+                return
+            else:
+                print(f"🚨 Incident gRPC Port {GRPC_PORT} : [IPv4:{report['ipv4']}, IPv6:{report['ipv6']}, Bindable:{report['bindable']}]")
+                print(f"Détail : {report['error']}")
+                print("⚠️ Désactivation de l'instrumentation pour éviter tout conflit.")
+                return
 
         # Tentative de lancement
         px.launch_app()
@@ -50,8 +79,7 @@ def setup_observability():
         print("✅ Observabilité Phoenix activée (http://localhost:6006)")
         
     except Exception as e:
-        # Silence Radio sur Erreur : Un seul message clair
-        print(f"❌ Observabilité ignorée : {e if 'bind' not in str(e) else 'Conflit de port gRPC'}")
+        print(f"❌ Observabilité ignorée : {e}")
 
 setup_observability()
 
