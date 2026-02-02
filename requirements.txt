@@ -180,3 +180,7 @@ zipp==3.23.0
 zstandard==0.25.0
 chromadb==1.4.1
 llama-index-vector-stores-chroma==0.5.5
+llama-index-postprocessor-cohere-rerank==0.6.0
+cohere==5.20.2
+fastavro==1.12.1
+types-requests==2.32.4.20260107
