@@ -1,31 +1,40 @@
-# Sprint Plan 5 - Observabilité, Intelligence HyDE & Multimodalité
+# Sprint Plan 6 - Advanced Retrieval & Reranking
 
-**ID :** PBI-005, PBI-006 & PBI-007  
-**Objectif :** Déployer une infrastructure d'observabilité pour piloter l'optimisation du RAG (HyDE) et débloquer l'analyse multimodale des documents complexes.
+**ID :** PBI-006 & PBI-008  
+**Objectif :** Optimiser la pertinence sémantique du moteur RAG en remplaçant HyDE par une stratégie de Fusion de Requêtes (Multi-Query) couplée à un Reranking Cohere.
 
 ## Tâches à réaliser (Lead-Dev)
 
-### 1. Observabilité Critique (PBI-005 - PRIORITÉ 1)
-- [ ] Installer `arize-phoenix` et `openinference-instrumentation-llama-index`.
-- [ ] Initialiser le serveur Phoenix au démarrage de l'application (`px.launch_app()`).
-- [ ] Configurer l'instrumentation globale via `set_global_handler("arize_phoenix")`.
-- [ ] **CA-O :** Vérifier que chaque requête RAG génère une trace complète visible sur l'interface (Retriever -> Post-Processor -> LLM).
+### 1. Refactoring & Nettoyage
+- [ ] Supprimer intégralement le code lié à `HyDEQueryTransform` et `TransformQueryEngine` dans `src/generation/rag_engine.py`.
+- [ ] S'assurer que le pipeline redevient un flux "propre" avant l'injection des nouveaux composants.
 
-### 2. Optimisation HyDE (PBI-006 - PRIORITÉ 2)
-- [ ] Implémenter `HyDEQueryTransform` dans le module `src/generation/rag_engine.py`.
-- [ ] Envelopper le moteur de réponse dans un `TransformQueryEngine`.
-- [ ] **Validation visuelle :** Utiliser Phoenix pour comparer la requête originale et la réponse hypothétique générée par HyDE.
+### 2. Implémentation du QueryFusionRetriever (PBI-006)
+- [ ] Configurer le `QueryFusionRetriever` en enveloppant le retriever vectoriel existant.
+- [ ] **Paramétrage :**
+    - `num_queries=3` (Utiliser `gpt-4o-mini` pour générer 2 variations + la question originale).
+    - `similarity_top_k=20` (Retenir 20 candidats par sous-requête).
+    - `mode="reciprocal_rerank"` (Fusion standard des rangs).
+    - `use_async=True` (Pour paralléliser les 3 recherches et minimiser la latence).
 
-### 3. Ingestion Multimodale Premium (PBI-007 - PRIORITÉ 3)
-- [ ] Mettre à jour `src/ingestion/parser.py` pour configurer `LlamaParse` en mode Premium.
-- [ ] Activer les options : `result_type="markdown"`, `use_vendor_multimodal_model=True`, `vendor_multimodal_model_name="gpt-4o"`.
-- [ ] Ré-indexer une thèse contenant des tableaux denses et des schémas pour valider l'extraction de données structurées.
+### 3. Intégration de CohereRerank (PBI-008)
+- [ ] Installer le plugin : `llama-index-postprocessor-cohere-rerank`.
+- [ ] Configurer le `CohereRerank` en `node_postprocessor` :
+    - `api_key` : Récupérée depuis les variables d'environnement.
+    - `model` : `rerank-english-v3.0` (ou multilingual).
+    - `top_n=5` (Filtrage final pour ne garder que les 5 meilleurs fragments pour le LLM).
+
+### 4. Validation Observabilité (Phoenix)
+- [ ] Vérifier dans l'interface Arize Phoenix que :
+    1. Les 3 requêtes sont bien générées.
+    2. Le nombre de Nodes passe bien de 20 (retrieval) à 5 (après reranking).
+    3. Le temps total de traitement reste fluide (< 4s).
 
 ## Critères d'Acceptation (CA)
-- **CA-1 (Phoenix)** : Toutes les étapes de la chaîne RAG (notamment la transformation HyDE) sont traçables visuellement dans Phoenix.
-- **CA-2 (HyDE)** : Le système démontre une meilleure robustesse face aux questions floues grâce à la génération du document hypothétique.
-- **CA-3 (Multimodal)** : Le parser identifie et transcrit les tableaux complexes en format Markdown exploitable par le LLM.
-- **CA-4 (Sources)** : Les citations de sources restent précises et incluent le contexte étendu (Sentence Window).
+- **CA-1** : HyDE est totalement supprimé du code source.
+- **CA-2** : Le système génère et exécute 3 variations de la question utilisateur.
+- **CA-3** : Le Reranker de Cohere affine la sélection des Nodes, améliorant la pertinence des réponses aux questions complexes.
+- **CA-4** : Les traces Phoenix confirment le bon déroulement du pipeline "Fusion -> Rerank -> Synthesize".
 
 ---
-**STATUT : PRIORITÉ ÉLEVÉE - PRÊT POUR EXÉCUTION**
+**STATUT : PRÊT POUR EXÉCUTION**

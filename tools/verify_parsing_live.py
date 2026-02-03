@@ -25,8 +25,8 @@ def verify_parsing():
     target_pdf = pdf_files[0]
     print(f"📄 Found PDF: {target_pdf}")
 
-    # 3. Initialize Parser
-    parser = ThesisParser(api_key=api_key)
+    # 3. Initialize Parser (LSP: Remove assignment if unused)
+    _ = ThesisParser(api_key=api_key)
     
     # 4. Attempt to parse only the first page
     print("⏳ Starting live parsing of the first page...")

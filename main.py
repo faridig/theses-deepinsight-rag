@@ -4,6 +4,7 @@ import socket
 import logging
 import phoenix as px
 from llama_index.core import set_global_handler
+from src.generation.rag_engine import RAGEngine
 
 # 1. Stratégie Radicale : Silence total des logs OpenTelemetry
 logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
@@ -20,14 +21,16 @@ def check_port_occupancy(port: int):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(0.1)
             results["ipv4"] = (s.connect_ex(('127.0.0.1', port)) == 0)
-    except Exception: pass
+    except Exception:
+        pass
 
     # Test IPv6
     try:
         with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
             s.settimeout(0.1)
             results["ipv6"] = (s.connect_ex(('::1', port)) == 0)
-    except Exception: pass
+    except Exception:
+        pass
 
     # Bind Check (Vérification de liaison)
     try:
@@ -83,7 +86,6 @@ def setup_observability():
 
 setup_observability()
 
-from src.generation.rag_engine import RAGEngine
 
 def main():
     print("=== Theses-DeepInsight RAG Engine Demo ===")

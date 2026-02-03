@@ -8,9 +8,13 @@ from llama_index.core import (
 )
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.core.postprocessor import MetadataReplacementPostProcessor, SimilarityPostprocessor
-from llama_index.core.indices.query.query_transform import HyDEQueryTransform
-from llama_index.core.query_engine import TransformQueryEngine
+from llama_index.core.postprocessor import MetadataReplacementPostProcessor
+from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
+from llama_index.postprocessor.cohere_rerank import CohereRerank
+from llama_index.core.query_engine import RetrieverQueryEngine
+from typing import List
+from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from src.indexing.vector_service import VectorService
 
 # Configuration des logs
@@ -45,11 +49,8 @@ class RAGEngine:
             raise RuntimeError(f"Impossible d'initialiser le RAGEngine : {e}")
 
         # 3. Pipeline de Post-Processing (CRITIQUE)
-        # MetadataReplacementPostProcessor remplace le nœud par sa fenêtre de contexte
-        # SimilarityPostprocessor désactivé pour la démonstration afin de garantir des réponses
-        self.post_processors = [
+        self.post_processors: List[BaseNodePostprocessor] = [
             MetadataReplacementPostProcessor(target_metadata_key="window"),
-            # SimilarityPostprocessor(similarity_cutoff=0.4)  # Désactivé pour démo
         ]
 
         # 4. Prompt Engineering (Français, Formel)
@@ -68,20 +69,45 @@ class RAGEngine:
         )
         self.qa_prompt_tmpl = PromptTemplate(self.qa_prompt_tmpl_str)
 
-        # 5. Assemblage du Query Engine de base
-        self.base_query_engine = self.index.as_query_engine(
-            node_postprocessors=self.post_processors,
-            similarity_top_k=5
-        )
+        # 5. Configuration du Reranker Cohere (PBI-008)
+        cohere_api_key = os.getenv("COHERE_API_KEY")
+        if not cohere_api_key:
+            logger.warning("COHERE_API_KEY non trouvée dans l'environnement. Le Reranking Cohere risque d'échouer.")
         
-        # Mise à jour du prompt de base
-        self.base_query_engine.update_prompts(
-            {"response_synthesizer:text_qa_template": self.qa_prompt_tmpl}
+        self.reranker = CohereRerank(
+            api_key=cohere_api_key,
+            model="rerank-multilingual-v3.0",
+            top_n=5
         )
 
-        # 6. Transformation HyDE (Intelligence Augmentée)
-        self.hyde = HyDEQueryTransform(include_original=True)
-        self.query_engine = TransformQueryEngine(self.base_query_engine, self.hyde)
+        # 6. Assemblage du Retriever Fusionné (PBI-006)
+        self.base_retriever = self.index.as_retriever(similarity_top_k=20)
+        
+        self.fusion_retriever = QueryFusionRetriever(
+            [self.base_retriever],
+            similarity_top_k=20,
+            num_queries=3,
+            mode=FUSION_MODES.RECIPROCAL_RANK,
+            use_async=True,
+            verbose=True
+        )
+
+        # 7. Assemblage du Query Engine final
+        # Note: On fusionne les post-processeurs
+        all_post_processors: List[BaseNodePostprocessor] = [
+            *self.post_processors,
+            self.reranker
+        ]
+        
+        self.query_engine = RetrieverQueryEngine(
+            retriever=self.fusion_retriever,
+            node_postprocessors=all_post_processors
+        )
+        
+        # Mise à jour du prompt
+        self.query_engine.update_prompts(
+            {"response_synthesizer:text_qa_template": self.qa_prompt_tmpl}
+        )
         
     def ask(self, question: str):
         """

@@ -1,6 +1,4 @@
 import pytest
-import os
-import shutil
 from llama_index.core.schema import TextNode
 from src.indexing.vector_service import VectorService
 from llama_index.core import Settings

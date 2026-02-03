@@ -1,8 +1,6 @@
-import os
 import sys
 import logging
 from src.generation.rag_engine import RAGEngine
-from pathlib import Path
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
