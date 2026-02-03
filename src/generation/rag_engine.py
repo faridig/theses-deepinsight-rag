@@ -11,10 +11,12 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
+from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
 from typing import List
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
+from llama_index.core.schema import TextNode
 from src.indexing.vector_service import VectorService
 
 # Configuration des logs
@@ -80,11 +82,40 @@ class RAGEngine:
             top_n=5
         )
 
-        # 6. Assemblage du Retriever Fusionné (PBI-006)
-        self.base_retriever = self.index.as_retriever(similarity_top_k=20)
+        # 6. Assemblage du Retriever Fusionné (PBI-010 - Hybrid Search)
+        self.vector_retriever = self.index.as_retriever(similarity_top_k=20)
         
+        # Récupération des nodes pour BM25
+        nodes = list(self.index.docstore.docs.values())
+        if not nodes:
+            logger.info("Docstore vide, récupération des nodes depuis Chroma pour BM25...")
+            try:
+                chroma_data = self.vector_service.chroma_collection.get()
+                nodes = []
+                for i in range(len(chroma_data['ids'])):
+                    nodes.append(TextNode(
+                        text=chroma_data['documents'][i],
+                        id_=chroma_data['ids'][i],
+                        metadata=chroma_data['metadatas'][i]
+                    ))
+                logger.info(f"{len(nodes)} nodes récupérés depuis Chroma.")
+            except Exception as e:
+                logger.error(f"Erreur lors de la récupération des nodes depuis Chroma : {e}")
+                nodes = []
+
+        if nodes:
+            self.bm25_retriever = BM25Retriever.from_defaults(
+                nodes=nodes,
+                similarity_top_k=20
+            )
+            retrievers = [self.vector_retriever, self.bm25_retriever]
+            logger.info("Recherche Hybride activée (Dense + Sparse).")
+        else:
+            logger.warning("BM25 désactivé (aucun node trouvé). Recherche Dense uniquement.")
+            retrievers = [self.vector_retriever]
+
         self.fusion_retriever = QueryFusionRetriever(
-            [self.base_retriever],
+            retrievers,
             similarity_top_k=20,
             num_queries=3,
             mode=FUSION_MODES.RECIPROCAL_RANK,
