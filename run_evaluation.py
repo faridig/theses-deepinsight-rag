@@ -12,11 +12,14 @@ from src.evaluation.evaluator import ThesesEvaluator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Silence opentelemetry exporter errors
+# Silence complet des logs techniques polluants pour la démo (Reviewer Feedback 3)
+logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
 logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
-# Silence ragas and pydantic noise
-logging.getLogger("ragas").setLevel(logging.ERROR)
-logging.getLogger("pydantic").setLevel(logging.ERROR)
+logging.getLogger("ragas").setLevel(logging.CRITICAL)
+logging.getLogger("pydantic").setLevel(logging.CRITICAL)
+logging.getLogger("httpx").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.CRITICAL)
+logging.getLogger("chromadb").setLevel(logging.ERROR)
 
 def setup_phoenix():
     """Initialise Phoenix pour capturer les traces de l'évaluation."""
@@ -71,24 +74,26 @@ async def main():
     evaluator = ThesesEvaluator()
     
     # 4. Exécution de l'évaluation
-    # Note: Ragas evaluate pour LlamaIndex est synchrone mais utilise de l'async en interne
     try:
         results = evaluator.evaluate_engine(engine.query_engine, dataset)
         
-        # 5. Affichage des résultats
-        print("\n=== RÉSULTATS DE L'ÉVALUATION RAGAS ===")
-        print(results)
-        
-        # 6. Export vers Phoenix
-        evaluator.export_to_phoenix(results)
-        
-        # Sauvegarde locale
-        with open("evaluation_report.json", "w", encoding="utf-8") as f:
-            json.dump(results.scores, f, indent=4)
-        logger.info("Rapport d'évaluation sauvegardé dans evaluation_report.json")
-        
+        if results:
+            # 5. Affichage des résultats
+            print("\n=== RÉSULTATS DE L'ÉVALUATION RAGAS ===")
+            print(results)
+            
+            # 6. Export vers Phoenix
+            evaluator.export_to_phoenix(results)
+            
+            # Sauvegarde locale
+            with open("evaluation_report.json", "w", encoding="utf-8") as f:
+                json.dump(results.scores, f, indent=4)
+            logger.info("Rapport d'évaluation sauvegardé dans evaluation_report.json")
+        else:
+            logger.warning("L'évaluation n'a produit aucun résultat exploitable.")
+            
     except Exception as e:
-        logger.error(f"Échec de l'évaluation : {e}")
+        logger.warning(f"L'évaluation a été interrompue : {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())

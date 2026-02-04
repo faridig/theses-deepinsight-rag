@@ -23,6 +23,10 @@ from src.indexing.vector_service import VectorService
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Silence total des logs techniques pour la démo
+logging.getLogger("chromadb").setLevel(logging.ERROR)
+logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
+
 load_dotenv()
 
 class RAGEngine:
@@ -113,11 +117,12 @@ class RAGEngine:
                 nodes = []
 
         if nodes:
-            # Si on a dû reconstruire les nodes, on les injecte dans le docstore pour la prochaine fois
+            # Correction Persistance Fantôme (Reviewer Feedback 2)
+            # On injecte explicitement dans le storage_context et on persiste
             if rebuilt_nodes:
-                self.index.docstore.add_documents(nodes)
+                self.vector_service.storage_context.docstore.add_documents(nodes)
                 self.vector_service.storage_context.persist(persist_dir=storage_path)
-                logger.info("Docstore persisté pour optimiser les prochains chargements (CA-4).")
+                logger.info("Docstore persisté avec succès pour optimiser les prochains chargements.")
 
             self.bm25_retriever = BM25Retriever.from_defaults(
                 nodes=nodes,
