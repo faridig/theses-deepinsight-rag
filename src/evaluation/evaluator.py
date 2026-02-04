@@ -3,8 +3,6 @@ import logging
 import pandas as pd
 import warnings
 from typing import List, Dict
-from llama_index.llms.openai import OpenAI
-from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.query_engine import BaseQueryEngine
 from ragas import EvaluationDataset
 # Import standard des métriques
@@ -15,8 +13,7 @@ from ragas.metrics import (
     ContextRecall,
 )
 
-from ragas.embeddings import embedding_factory
-from ragas.llms import llm_factory
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from ragas.integrations.llama_index import evaluate
 import phoenix as px
 
@@ -34,10 +31,9 @@ class ThesesEvaluator:
     Evaluateur pour le système RAG utilisant le framework Ragas.
     """
     def __init__(self, model: str = "gpt-4o"):
-        self.llm = OpenAI(model=model)
-        self.evaluator_llm = llm_factory(model=model, client=self.llm)
-        # Utilisation de embedding_factory au lieu de LlamaIndexEmbeddingsWrapper pour compatibilité
-        self.embeddings = embedding_factory(model="openai/text-embedding-3-small")
+        # Utilisation des wrappers Langchain comme recommandé par le Reviewer
+        self.evaluator_llm = ChatOpenAI(model=model)
+        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         
         # Initialisation des métriques
         self.metrics = [
@@ -54,7 +50,7 @@ class ThesesEvaluator:
         """
         logger.info(f"Démarrage de l'évaluation Ragas sur {len(dataset)} questions...")
         
-        # Adaptation du dataset pour Ragas (Mapping corrigé pour éviter input_value=None)
+        # Adaptation du dataset pour Ragas
         formatted_dataset = []
         for item in dataset:
             formatted_dataset.append({
@@ -64,6 +60,8 @@ class ThesesEvaluator:
         
         try:
             eval_dataset = EvaluationDataset.from_list(formatted_dataset)
+            # On laisse Ragas gérer l'interface avec LlamaIndex
+            # Les métriques utiliseront nos objets Langchain configurés
             result = evaluate(
                 query_engine=query_engine,
                 metrics=self.metrics,
