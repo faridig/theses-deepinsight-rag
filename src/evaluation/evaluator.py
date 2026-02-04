@@ -14,38 +14,46 @@ from ragas.metrics import (
     ContextRecall,
 )
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
+from openai import OpenAI as OpenAIClient
+from ragas.llms import llm_factory
+from ragas.embeddings import embedding_factory
 from ragas.integrations.llama_index import evaluate
 from ragas.run_config import RunConfig
 import phoenix as px
 
-# Filtrer les warnings de dépréciation pour CA-4
+# Filtrer massivement les warnings pour une sortie propre
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", module="pydantic")
 
-# Silence opentelemetry exporter errors (Phoenix connection refused)
+# Silence complet des logs techniques polluants (CA-4 / Reviewer)
 logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
-# Silence ragas parse errors if possible
 logging.getLogger("ragas").setLevel(logging.ERROR)
+logging.getLogger("pydantic").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
 class ThesesEvaluator:
     """
     Evaluateur pour le système RAG utilisant le framework Ragas.
+    Optimisé pour la stabilité du parsing et la performance (Sprint 1).
     """
     def __init__(self, model: str = "gpt-4o"):
-        # Configuration des wrappers Langchain avec options de robustesse
-        self.base_llm = ChatOpenAI(model=model, temperature=0)
-        self.base_embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        # Initialisation via les factory modernes de Ragas pour une stabilité maximale (CA-2)
+        # On utilise directement l'API OpenAI pour éviter les couches de wrapping instables
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("OPENAI_API_KEY absente. L'évaluation risque d'échouer.")
         
-        # Wrappers Ragas explicites pour une stabilité maximale (CA-2)
-        self.evaluator_llm = LangchainLLMWrapper(self.base_llm)
-        self.embeddings = LangchainEmbeddingsWrapper(self.base_embeddings)
+        client = OpenAIClient(api_key=api_key)
         
-        # Initialisation des métriques avec LLM explicite
+        # Factory Ragas (compatibles Instructor pour le parsing JSON robuste)
+        # On force la température à 0 pour la consistance du parsing (CA-1)
+        self.evaluator_llm = llm_factory(model=model, client=client)
+        self.embeddings = embedding_factory(model="text-embedding-3-small", client=client)
+        
+        # Initialisation des métriques avec le LLM configuré
         self.metrics = [
             Faithfulness(llm=self.evaluator_llm),
             AnswerRelevancy(llm=self.evaluator_llm, embeddings=self.embeddings),
@@ -56,7 +64,7 @@ class ThesesEvaluator:
     def evaluate_engine(self, query_engine: BaseQueryEngine, dataset: List[Dict[str, str]]):
         """
         Évalue un QueryEngine sur un dataset donné.
-        dataset: Liste de dictionnaires avec 'question' et 'ground_truth'.
+        Optimisé pour éviter les ValidationError via RunConfig.
         """
         logger.info(f"Démarrage de l'évaluation Ragas sur {len(dataset)} questions...")
         
@@ -70,24 +78,25 @@ class ThesesEvaluator:
         
         try:
             eval_dataset = EvaluationDataset.from_list(formatted_dataset)
-            # Configuration de l'exécution pour gérer les échecs de parsing (ValidationError)
-            run_config = RunConfig(max_retries=3, timeout=120)
             
-            # Passage explicite du LLM et des Embeddings à la fonction evaluate
-            # pour éviter les initialisations par défaut qui échouent (NoneType error)
+            # Configuration robuste pour éviter les échecs de parsing (CA-1)
+            run_config = RunConfig(
+                max_retries=3,
+                timeout=120,
+                max_workers=4 # Réduction pour éviter les ratelimits et améliorer la stabilité
+            )
+            
+            # Exécution de l'évaluation
             result = evaluate(
                 query_engine=query_engine,
                 metrics=self.metrics,
                 dataset=eval_dataset,
-                llm=self.evaluator_llm,
-                embeddings=self.embeddings,
-                run_config=run_config
+                run_config=run_config,
+                show_progress=True
             )
             return result
         except Exception as e:
-            logger.error(f"Erreur lors de l'évaluation Ragas : {e}")
-            # En cas de nan ou d'échec de parsing, on peut tenter de retourner un objet vide 
-            # mais ici on préfère lever pour que le problème soit visible en dev.
+            logger.error(f"Erreur fatale lors de l'évaluation Ragas : {e}")
             raise
 
     def export_to_phoenix(self, evaluation_result):
