@@ -7,11 +7,7 @@ class TestThesesEvaluator:
     @patch('src.evaluation.evaluator.OpenAI')
     @patch('src.evaluation.evaluator.OpenAIEmbedding')
     @patch('src.evaluation.evaluator.llm_factory')
-    @patch('src.evaluation.evaluator.Faithfulness')
-    @patch('src.evaluation.evaluator.AnswerRelevancy')
-    @patch('src.evaluation.evaluator.ContextPrecision')
-    @patch('src.evaluation.evaluator.ContextRecall')
-    def test_evaluator_initialization(self, mock_recall, mock_precision, mock_relevancy, mock_faithfulness, mock_llm_factory, mock_embed, mock_openai):
+    def test_evaluator_initialization(self, mock_llm_factory, mock_embed, mock_openai):
         evaluator = ThesesEvaluator()
         assert len(evaluator.metrics) == 4
 
@@ -19,11 +15,7 @@ class TestThesesEvaluator:
     @patch('src.evaluation.evaluator.OpenAIEmbedding')
     @patch('src.evaluation.evaluator.llm_factory')
     @patch('src.evaluation.evaluator.evaluate')
-    @patch('src.evaluation.evaluator.Faithfulness')
-    @patch('src.evaluation.evaluator.AnswerRelevancy')
-    @patch('src.evaluation.evaluator.ContextPrecision')
-    @patch('src.evaluation.evaluator.ContextRecall')
-    def test_evaluate_engine(self, mock_recall, mock_precision, mock_relevancy, mock_faithfulness, mock_evaluate, mock_llm_factory, mock_embed, mock_openai):
+    def test_evaluate_engine(self, mock_evaluate, mock_llm_factory, mock_embed, mock_openai):
         evaluator = ThesesEvaluator()
         mock_engine = MagicMock()
         dataset = [{"question": "Q1", "ground_truth": "A1"}]

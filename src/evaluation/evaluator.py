@@ -7,11 +7,13 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.query_engine import BaseQueryEngine
 from ragas import EvaluationDataset
 # Note: In future ragas >= 1.0, use from ragas.metrics.collections import ...
-# Adaptation pour supprimer les warnings de dépréciation
-try:
-    from ragas.metrics.collections import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall
-except ImportError:
-    from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall
+# Import standard des métriques (compatible avec LlamaIndexEmbeddingsWrapper)
+from ragas.metrics import (
+    Faithfulness,
+    AnswerRelevancy,
+    ContextPrecision,
+    ContextRecall,
+)
 
 from ragas.embeddings import LlamaIndexEmbeddingsWrapper
 
