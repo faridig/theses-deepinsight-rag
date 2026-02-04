@@ -6,14 +6,12 @@ from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.query_engine import BaseQueryEngine
 from ragas import EvaluationDataset
-from ragas.metrics import (
-    Faithfulness,
-    AnswerRelevancy,
-    ContextPrecision,
-    ContextRecall,
-)
-from ragas.embeddings import LlamaIndexEmbeddingsWrapper
 # Note: In future ragas >= 1.0, use from ragas.metrics.collections import ...
+# Adaptation pour supprimer les warnings de dépréciation
+try:
+    from ragas.metrics.collections import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall
+except ImportError:
+    from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall
 
 from ragas.llms import llm_factory
 from ragas.integrations.llama_index import evaluate
@@ -45,12 +43,12 @@ class ThesesEvaluator:
         """
         logger.info(f"Démarrage de l'évaluation Ragas sur {len(dataset)} questions...")
         
-        # Adaptation du dataset pour Ragas 0.4.x
+        # Adaptation du dataset pour Ragas
         formatted_dataset = []
         for item in dataset:
             formatted_dataset.append({
-                "user_input": item.get("question"),
-                "reference": item.get("ground_truth"),
+                "question": item.get("question"),
+                "ground_truth": item.get("ground_truth"),
             })
         
         try:

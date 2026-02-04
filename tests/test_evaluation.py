@@ -20,7 +20,11 @@ class TestThesesEvaluator:
         mock_engine = MagicMock()
         dataset = [{"question": "Q1", "ground_truth": "A1"}]
         
-        mock_evaluate.return_value = MagicMock(scores={"faithfulness": 0.9})
+        # Mocking the Ragas Result object
+        mock_result = MagicMock()
+        mock_result.scores = {"faithfulness": 0.9}
+        mock_result.__getitem__ = lambda self, key: self.scores[key]
+        mock_evaluate.return_value = mock_result
         
         result = evaluator.evaluate_engine(mock_engine, dataset)
         

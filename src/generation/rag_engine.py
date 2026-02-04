@@ -124,7 +124,7 @@ class RAGEngine:
         self.fusion_retriever = QueryFusionRetriever(
             retrievers,
             similarity_top_k=20,
-            num_queries=3,
+            num_queries=1,  # Optimisation CA-4: Pas de query expansion (trop lent), juste fusion hybride
             mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=True,
             verbose=True
