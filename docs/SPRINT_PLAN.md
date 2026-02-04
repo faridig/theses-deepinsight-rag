@@ -1,40 +1,33 @@
-# Sprint Plan 6 - Advanced Retrieval & Reranking
+# Sprint Plan 7 - Puissance de Recherche Hybride & Certification Ragas
 
-**ID :** PBI-006 & PBI-008  
-**Objectif :** Optimiser la pertinence sémantique du moteur RAG en remplaçant HyDE par une stratégie de Fusion de Requêtes (Multi-Query) couplée à un Reranking Cohere.
+**ID :** PBI-010 & PBI-009  
+**Objectif :** Atteindre une précision chirurgicale sur les termes techniques via la recherche Hybride (Dense + Sparse) et valider la qualité du système par des métriques scientifiques Ragas.
 
 ## Tâches à réaliser (Lead-Dev)
 
-### 1. Refactoring & Nettoyage
-- [ ] Supprimer intégralement le code lié à `HyDEQueryTransform` et `TransformQueryEngine` dans `src/generation/rag_engine.py`.
-- [ ] S'assurer que le pipeline redevient un flux "propre" avant l'injection des nouveaux composants.
+### 1. Implémentation de la Recherche Hybride (PBI-010)
+- [ ] Installer la dépendance : `rank_bm25`.
+- [ ] Initialiser le `BM25Retriever` à partir du `docstore` de l'index existant.
+- [ ] Configurer le `QueryFusionRetriever` pour orchestrer :
+    - Le retriever vectoriel actuel (Dense).
+    - Le nouveau `BM25Retriever` (Sparse).
+- [ ] Utiliser le mode `reciprocal_rerank` pour la fusion des résultats.
+- [ ] S'assurer que le `CohereRerank` intervient toujours en post-traitement sur les résultats fusionnés.
 
-### 2. Implémentation du QueryFusionRetriever (PBI-006)
-- [ ] Configurer le `QueryFusionRetriever` en enveloppant le retriever vectoriel existant.
-- [ ] **Paramétrage :**
-    - `num_queries=3` (Utiliser `gpt-4o-mini` pour générer 2 variations + la question originale).
-    - `similarity_top_k=20` (Retenir 20 candidats par sous-requête).
-    - `mode="reciprocal_rerank"` (Fusion standard des rangs).
-    - `use_async=True` (Pour paralléliser les 3 recherches et minimiser la latence).
+### 2. Mise en place du Framework d'Évaluation (PBI-009)
+- [ ] Installer `ragas`.
+- [ ] Créer un module `src/evaluation/evaluator.py` utilisant l'intégration native LlamaIndex.
+- [ ] Configurer les 4 métriques clés : `Faithfulness`, `AnswerRelevancy`, `ContextPrecision`, `ContextRecall`.
+- [ ] Développer un script de test sur un "Golden Dataset" de 10-15 questions complexes pour obtenir un score global de performance.
 
-### 3. Intégration de CohereRerank (PBI-008)
-- [ ] Installer le plugin : `llama-index-postprocessor-cohere-rerank`.
-- [ ] Configurer le `CohereRerank` en `node_postprocessor` :
-    - `api_key` : Récupérée depuis les variables d'environnement.
-    - `model` : `rerank-english-v3.0` (ou multilingual).
-    - `top_n=5` (Filtrage final pour ne garder que les 5 meilleurs fragments pour le LLM).
-
-### 4. Validation Observabilité (Phoenix)
-- [ ] Vérifier dans l'interface Arize Phoenix que :
-    1. Les 3 requêtes sont bien générées.
-    2. Le nombre de Nodes passe bien de 20 (retrieval) à 5 (après reranking).
-    3. Le temps total de traitement reste fluide (< 4s).
+### 3. Intégration Phoenix
+- [ ] Configurer l'export des scores Ragas vers Arize Phoenix pour visualiser la qualité des réponses directement dans les traces.
 
 ## Critères d'Acceptation (CA)
-- **CA-1** : HyDE est totalement supprimé du code source.
-- **CA-2** : Le système génère et exécute 3 variations de la question utilisateur.
-- **CA-3** : Le Reranker de Cohere affine la sélection des Nodes, améliorant la pertinence des réponses aux questions complexes.
-- **CA-4** : Les traces Phoenix confirment le bon déroulement du pipeline "Fusion -> Rerank -> Synthesize".
+- **CA-1** : Le système remonte correctement des documents contenant des termes techniques exacts ou acronymes, même si la sémantique est floue (Grâce au BM25).
+- **CA-2** : Un rapport Ragas est généré automatiquement, montrant des scores de Fidélité et de Pertinence.
+- **CA-3** : Les traces Phoenix montrent la fusion des deux retrievers (Vector + BM25).
+- **CA-4** : Aucun ralentissement majeur n'est constaté (< 5s pour une réponse complète hybride + rerank).
 
 ---
-**STATUT : PRÊT POUR EXÉCUTION**
+**STATUT : SPRINT DE QUALITÉ - PRÊT POUR EXÉCUTION**

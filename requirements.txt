@@ -184,3 +184,7 @@ llama-index-postprocessor-cohere-rerank==0.6.0
 cohere==5.20.2
 fastavro==1.12.1
 types-requests==2.32.4.20260107
+rank_bm25==0.2.2
+llama-index-retrievers-bm25==0.6.5
+bm25s==0.2.14
+pystemmer==2.2.0.3

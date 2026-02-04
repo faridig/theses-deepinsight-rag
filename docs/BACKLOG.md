@@ -12,9 +12,11 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-003** | **Indexation Vectorielle** | Stockage sémantique avec filtrage par métadonnées. | DONE | MOYENNE |
 | **PBI-004** | **Moteur de Réponse RAG** | Pipeline de génération (Query Engine) avec LLM. | DONE | MOYENNE |
 | **PBI-005** | **Évaluation & Observabilité** | Implémentation d'Arize Phoenix pour le monitoring et la traçabilité. | DONE | CRITIQUE |
-| **PBI-006** | **Multi-Query Retrieval** | Génération de 3 variations de requête pour élargir la recherche sémantique. | IN_PROGRESS | HAUTE |
-| **PBI-008** | **Reranking & High Top-K** | Passage à top_k=20 et intégration d'un Reranker (Cohere) pour affiner la pertinence. | IN_PROGRESS | HAUTE |
+| **PBI-006** | **Multi-Query Retrieval** | Génération de 3 variations de requête pour élargir la recherche sémantique. | DONE | HAUTE |
+| **PBI-008** | **Reranking & High Top-K** | Passage à top_k=20 et intégration d'un Reranker (Cohere) pour affiner la pertinence. | DONE | HAUTE |
+| **PBI-010** | **Recherche Hybride (BM25)** | Combinaison de la recherche sémantique et lexicale pour les termes techniques. | IN_PROGRESS | HAUTE |
+| **PBI-009** | **Évaluation Ragas** | Mesure scientifique de la fidélité, pertinence et précision du contexte (0-1). | IN_PROGRESS | HAUTE |
 | **PBI-007** | **LlamaParse Multimodal Premium** | Extraction avancée des graphiques et tableaux via GPT-4o. | EN ATTENTE | HAUTE |
 
 ---
-*Dernière mise à jour : 02/02/2026*
+*Dernière mise à jour : 03/02/2026*

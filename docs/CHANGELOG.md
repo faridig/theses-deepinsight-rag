@@ -2,6 +2,20 @@
 
 Toutes les modifications notables de ce projet seront documentées dans ce fichier.
 
+## [0.7.0] - 2026-02-03
+### Ajouté
+- **Sprint 6 : Advanced Retrieval & Reranking (PBI-006 & PBI-008)**
+    - Mise en œuvre du `QueryFusionRetriever` pour une recherche Multi-Query robuste.
+    - Intégration du post-processeur `CohereRerank` (modèle v3.0) pour affiner la pertinence (Top-20 vers Top-5).
+    - Suppression (Refactoring) de la couche HyDE pour garantir l'adhérence aux faits scientifiques.
+
+## [0.6.0] - 2026-02-02
+### Ajouté
+- **Sprint 5 : Observabilité & Traçabilité (PBI-005)**
+    - Intégration d'Arize Phoenix pour le monitoring en temps réel.
+    - Instrumentation complète du pipeline LlamaIndex via `set_global_handler`.
+    - Analyse des latences et des coûts (tokens) par étape de requête.
+
 ## [0.5.0] - 2026-02-01
 ### Ajouté
 - **Sprint 4 : Moteur de Réponse RAG (PBI-004)**
