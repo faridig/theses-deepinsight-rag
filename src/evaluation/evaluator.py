@@ -13,6 +13,8 @@ try:
 except ImportError:
     from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall
 
+from ragas.embeddings import LlamaIndexEmbeddingsWrapper
+
 from ragas.llms import llm_factory
 from ragas.integrations.llama_index import evaluate
 import phoenix as px
@@ -73,9 +75,12 @@ class ThesesEvaluator:
             
             # Vérifier si Phoenix est accessible
             try:
-                px.Client()
+                # Tentative de connexion basique
+                if not px.active_session():
+                     logger.warning("Aucune session Phoenix active détectée.")
+                     return False
             except Exception:
-                logger.warning("Client Phoenix non accessible. Les scores ne seront pas loggués.")
+                logger.warning("Client Phoenix non accessible (Connection Refused). Les scores ne seront pas loggués.")
                 return False
             
             for eval_name in eval_scores_df.columns:
