@@ -13,7 +13,8 @@ class TestThesesEvaluator:
     @patch('src.evaluation.evaluator.ChatOpenAI')
     @patch('src.evaluation.evaluator.OpenAIEmbeddings')
     @patch('src.evaluation.evaluator.evaluate')
-    def test_evaluate_engine(self, mock_evaluate, mock_embed, mock_openai):
+    @patch('src.evaluation.evaluator.RunConfig')
+    def test_evaluate_engine(self, mock_run_config, mock_evaluate, mock_embed, mock_openai):
         evaluator = ThesesEvaluator()
         mock_engine = MagicMock()
         dataset = [{"question": "Q1", "ground_truth": "A1"}]

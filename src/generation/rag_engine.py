@@ -87,8 +87,9 @@ class RAGEngine:
         
         # Récupération des nodes pour BM25
         nodes = list(self.index.docstore.docs.values())
+        rebuilt_nodes = False
         if not nodes:
-            logger.info("Docstore vide, récupération des nodes depuis Chroma pour BM25...")
+            logger.info("Docstore vide ou non persistant, récupération des nodes depuis Chroma pour BM25...")
             try:
                 chroma_data = self.vector_service.chroma_collection.get()
                 nodes = []
@@ -105,12 +106,19 @@ class RAGEngine:
                             id_=ids[i],
                             metadata=metadata or {}
                         ))
+                    rebuilt_nodes = True
                 logger.info(f"{len(nodes)} nodes récupérés depuis Chroma.")
             except Exception as e:
                 logger.error(f"Erreur lors de la récupération des nodes depuis Chroma : {e}")
                 nodes = []
 
         if nodes:
+            # Si on a dû reconstruire les nodes, on les injecte dans le docstore pour la prochaine fois
+            if rebuilt_nodes:
+                self.index.docstore.add_documents(nodes)
+                self.vector_service.storage_context.persist(persist_dir=storage_path)
+                logger.info("Docstore persisté pour optimiser les prochains chargements (CA-4).")
+
             self.bm25_retriever = BM25Retriever.from_defaults(
                 nodes=nodes,
                 similarity_top_k=5

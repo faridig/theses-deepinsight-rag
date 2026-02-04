@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 # Silence opentelemetry exporter errors
 logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
+# Silence ragas and pydantic noise
+logging.getLogger("ragas").setLevel(logging.ERROR)
+logging.getLogger("pydantic").setLevel(logging.ERROR)
 
 def setup_phoenix():
     """Initialise Phoenix pour capturer les traces de l'évaluation."""

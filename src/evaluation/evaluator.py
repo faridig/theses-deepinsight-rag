@@ -2,6 +2,7 @@
 import logging
 import pandas as pd
 import warnings
+import os
 from typing import List, Dict
 from llama_index.core.query_engine import BaseQueryEngine
 from ragas import EvaluationDataset
@@ -14,7 +15,10 @@ from ragas.metrics import (
 )
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.integrations.llama_index import evaluate
+from ragas.run_config import RunConfig
 import phoenix as px
 
 # Filtrer les warnings de dépréciation pour CA-4
@@ -23,6 +27,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 # Silence opentelemetry exporter errors (Phoenix connection refused)
 logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
+# Silence ragas parse errors if possible
+logging.getLogger("ragas").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +37,15 @@ class ThesesEvaluator:
     Evaluateur pour le système RAG utilisant le framework Ragas.
     """
     def __init__(self, model: str = "gpt-4o"):
-        # Utilisation des wrappers Langchain comme recommandé par le Reviewer
-        self.evaluator_llm = ChatOpenAI(model=model)
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        # Configuration des wrappers Langchain avec options de robustesse
+        self.base_llm = ChatOpenAI(model=model, temperature=0)
+        self.base_embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         
-        # Initialisation des métriques
+        # Wrappers Ragas explicites pour une stabilité maximale (CA-2)
+        self.evaluator_llm = LangchainLLMWrapper(self.base_llm)
+        self.embeddings = LangchainEmbeddingsWrapper(self.base_embeddings)
+        
+        # Initialisation des métriques avec LLM explicite
         self.metrics = [
             Faithfulness(llm=self.evaluator_llm),
             AnswerRelevancy(llm=self.evaluator_llm, embeddings=self.embeddings),
@@ -60,16 +70,24 @@ class ThesesEvaluator:
         
         try:
             eval_dataset = EvaluationDataset.from_list(formatted_dataset)
-            # On laisse Ragas gérer l'interface avec LlamaIndex
-            # Les métriques utiliseront nos objets Langchain configurés
+            # Configuration de l'exécution pour gérer les échecs de parsing (ValidationError)
+            run_config = RunConfig(max_retries=3, timeout=120)
+            
+            # Passage explicite du LLM et des Embeddings à la fonction evaluate
+            # pour éviter les initialisations par défaut qui échouent (NoneType error)
             result = evaluate(
                 query_engine=query_engine,
                 metrics=self.metrics,
-                dataset=eval_dataset
+                dataset=eval_dataset,
+                llm=self.evaluator_llm,
+                embeddings=self.embeddings,
+                run_config=run_config
             )
             return result
         except Exception as e:
             logger.error(f"Erreur lors de l'évaluation Ragas : {e}")
+            # En cas de nan ou d'échec de parsing, on peut tenter de retourner un objet vide 
+            # mais ici on préfère lever pour que le problème soit visible en dev.
             raise
 
     def export_to_phoenix(self, evaluation_result):

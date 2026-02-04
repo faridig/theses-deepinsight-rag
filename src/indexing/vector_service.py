@@ -37,7 +37,10 @@ class VectorService:
         self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
         
         # Initialize StorageContext
-        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+        if os.path.exists(os.path.join(self.storage_path, "docstore.json")):
+            self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store, persist_dir=self.storage_path)
+        else:
+            self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
         
         self._index: Optional[VectorStoreIndex] = None
 
@@ -65,6 +68,9 @@ class VectorService:
         else:
             # If index exists, add nodes to it
             self._index.insert_nodes(nodes)
+            
+        # Persist the storage context (docstore, index_store, etc.)
+        self.storage_context.persist(persist_dir=self.storage_path)
             
         return self._index
 
