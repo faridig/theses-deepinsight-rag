@@ -10,7 +10,9 @@ from ragas.metrics import (
     ContextPrecision,
     ContextRecall,
 )
-from ragas.llms import LlamaIndexLLMWrapper
+# Note: In future ragas >= 1.0, use from ragas.metrics.collections import ...
+
+from ragas.llms import llm_factory
 from ragas.integrations.llama_index import evaluate
 import phoenix as px
 
@@ -22,7 +24,7 @@ class ThesesEvaluator:
     """
     def __init__(self, model: str = "gpt-4o"):
         self.llm = OpenAI(model=model)
-        self.evaluator_llm = LlamaIndexLLMWrapper(llm=self.llm)
+        self.evaluator_llm = llm_factory(model=model, client=self.llm)
         
         # Initialisation des métriques
         self.metrics = [

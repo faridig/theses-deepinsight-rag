@@ -4,6 +4,7 @@ import json
 import logging
 import asyncio
 from dotenv import load_dotenv
+from llama_index.core import set_global_handler
 from src.generation.rag_engine import RAGEngine
 from src.evaluation.evaluator import ThesesEvaluator
 
@@ -11,12 +12,30 @@ from src.evaluation.evaluator import ThesesEvaluator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def setup_phoenix():
+    """Initialise Phoenix pour capturer les traces de l'évaluation."""
+    try:
+        import phoenix as px
+        if os.getenv("DISABLE_PHOENIX") != "1":
+            # On tente de se connecter à une instance existante ou on lance
+            try:
+                px.active_session()
+            except Exception:
+                px.launch_app()
+            set_global_handler("arize_phoenix")
+            logger.info("Observabilité Phoenix activée pour l'évaluation.")
+    except Exception as e:
+        logger.warning(f"Impossible d'activer Phoenix : {e}")
+
 async def main():
     load_dotenv()
     
     if not os.getenv("OPENAI_API_KEY") or not os.getenv("COHERE_API_KEY"):
         logger.error("Clés API manquantes (OPENAI_API_KEY ou COHERE_API_KEY).")
         return
+
+    # Configuration de l'observabilité
+    setup_phoenix()
 
     # 1. Initialisation du moteur RAG
     logger.info("Initialisation du moteur RAG...")
