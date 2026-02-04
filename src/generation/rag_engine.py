@@ -23,8 +23,8 @@ from src.indexing.vector_service import VectorService
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Silence total des logs techniques pour la démo
-logging.getLogger("chromadb").setLevel(logging.ERROR)
+# Silence sélectif (Warnings & Télémétrie uniquement)
+logging.getLogger("chromadb").setLevel(logging.WARNING)
 logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
 
 load_dotenv()
@@ -89,14 +89,13 @@ class RAGEngine:
         # 6. Assemblage du Retriever Fusionné (PBI-010 - Hybrid Search)
         self.vector_retriever = self.index.as_retriever(similarity_top_k=5)
         
-        # Récupération des nodes pour BM25
-        nodes = list(self.index.docstore.docs.values())
-        rebuilt_nodes = False
+        # Récupération directe des nodes via le docstore (Exigence Reviewer 3 : Pas de reconstruction inutile)
+        nodes = list(self.vector_service.storage_context.docstore.docs.values())
+        
         if not nodes:
             logger.info("Docstore vide ou non persistant, récupération des nodes depuis Chroma pour BM25...")
             try:
                 chroma_data = self.vector_service.chroma_collection.get()
-                nodes = []
                 if chroma_data and chroma_data.get('ids'):
                     ids = chroma_data.get('ids', [])
                     documents = chroma_data.get('documents', []) or []
@@ -110,20 +109,15 @@ class RAGEngine:
                             id_=ids[i],
                             metadata=metadata or {}
                         ))
-                    rebuilt_nodes = True
-                logger.info(f"{len(nodes)} nodes récupérés depuis Chroma.")
+                    
+                    # Correction Persistance
+                    self.vector_service.storage_context.docstore.add_documents(nodes)
+                    self.vector_service.storage_context.persist(persist_dir=storage_path)
+                    logger.info("Docstore persisté avec succès.")
             except Exception as e:
-                logger.error(f"Erreur lors de la récupération des nodes depuis Chroma : {e}")
-                nodes = []
+                logger.error(f"Erreur lors de la récupération des nodes : {e}")
 
         if nodes:
-            # Correction Persistance Fantôme (Reviewer Feedback 2)
-            # On injecte explicitement dans le storage_context et on persiste
-            if rebuilt_nodes:
-                self.vector_service.storage_context.docstore.add_documents(nodes)
-                self.vector_service.storage_context.persist(persist_dir=storage_path)
-                logger.info("Docstore persisté avec succès pour optimiser les prochains chargements.")
-
             self.bm25_retriever = BM25Retriever.from_defaults(
                 nodes=nodes,
                 similarity_top_k=5

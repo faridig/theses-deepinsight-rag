@@ -15,45 +15,42 @@ from ragas.metrics import (
 )
 
 from openai import OpenAI as OpenAIClient
+from langchain_openai import OpenAIEmbeddings as LangchainOpenAIEmbeddings
 from ragas.llms import llm_factory
-from ragas.embeddings import OpenAIEmbeddings
+from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.integrations.llama_index import evaluate
 from ragas.run_config import RunConfig
 import phoenix as px
 
-# Filtrer massivement les warnings pour une sortie propre
+# Filtrer les warnings (mais pas les erreurs)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", module="pydantic")
 
-# Silence complet des logs techniques polluants (CA-4 / Reviewer)
-logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
-logging.getLogger("ragas").setLevel(logging.CRITICAL)
-logging.getLogger("pydantic").setLevel(logging.CRITICAL)
-logging.getLogger("httpx").setLevel(logging.CRITICAL)
-logging.getLogger("urllib3").setLevel(logging.CRITICAL)
+# Silence telemetry (bloquant si Phoenix n'est pas lancé)
+logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
+# Niveau ERROR pour Ragas (Exigence Reviewer 2 : Transparence des logs)
+logging.getLogger("ragas").setLevel(logging.ERROR)
+# Silence Pydantic noise
+logging.getLogger("pydantic").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
 class ThesesEvaluator:
     """
     Evaluateur pour le système RAG utilisant le framework Ragas.
-    Optimisé pour la stabilité du parsing et la performance (Sprint 1).
+    Optimisé pour la robustesse et la compatibilité des embeddings.
     """
     def __init__(self, model: str = "gpt-4o"):
-        # Initialisation via les factory modernes de Ragas pour une stabilité maximale (CA-2)
         api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            logger.warning("OPENAI_API_KEY absente. L'évaluation risque d'échouer.")
-        
         client = OpenAIClient(api_key=api_key)
         
         # Factory Ragas (Instructor)
         self.evaluator_llm = llm_factory(model=model, client=client)
         
-        # Utilisation explicite de ragas.embeddings.OpenAIEmbeddings pour AnswerRelevancy (Reviewer Feedback 1)
-        # C'est l'objet le plus stable attendu par les métriques Ragas 0.4.x
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small", client=client)
+        # Réparation AnswerRelevancy (Exigence Reviewer 1 : Compatibilité stable)
+        # Utilisation de LangchainEmbeddingsWrapper avec langchain_openai
+        base_embeddings = LangchainOpenAIEmbeddings(model="text-embedding-3-small")
+        self.embeddings = LangchainEmbeddingsWrapper(base_embeddings)
         
         # Initialisation des métriques
         self.metrics = [
@@ -66,11 +63,9 @@ class ThesesEvaluator:
     def evaluate_engine(self, query_engine: BaseQueryEngine, dataset: List[Dict[str, str]]):
         """
         Évalue un QueryEngine sur un dataset donné.
-        Optimisé pour éviter les ValidationError via RunConfig.
         """
         logger.info(f"Démarrage de l'évaluation Ragas sur {len(dataset)} questions...")
         
-        # Adaptation du dataset pour Ragas
         formatted_dataset = []
         for item in dataset:
             formatted_dataset.append({
@@ -81,15 +76,12 @@ class ThesesEvaluator:
         try:
             eval_dataset = EvaluationDataset.from_list(formatted_dataset)
             
-            # Configuration robuste (CA-1)
             run_config = RunConfig(
                 max_retries=3,
                 timeout=180,
                 max_workers=4
             )
             
-            # Exécution de l'évaluation
-            # Note: evaluate lance le query_engine pour chaque question du dataset
             result = evaluate(
                 query_engine=query_engine,
                 metrics=self.metrics,
@@ -99,13 +91,9 @@ class ThesesEvaluator:
             )
             return result
         except Exception as e:
-            # On log en WARNING si c'est une erreur attendue (ex: colonnes manquantes dues à un échec LLM)
-            # pour respecter la consigne "Zero Error" du Reviewer en cas de problème de contenu.
-            if "requires the following additional columns" in str(e):
-                logger.warning(f"Échec de l'évaluation Ragas (Contenu manquant) : {e}")
-                return None
-            logger.error(f"Erreur technique lors de l'évaluation Ragas : {e}")
+            logger.error(f"Erreur lors de l'évaluation Ragas : {e}")
             raise
+
 
 
     def export_to_phoenix(self, evaluation_result):
