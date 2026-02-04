@@ -83,7 +83,7 @@ class RAGEngine:
         )
 
         # 6. Assemblage du Retriever Fusionné (PBI-010 - Hybrid Search)
-        self.vector_retriever = self.index.as_retriever(similarity_top_k=20)
+        self.vector_retriever = self.index.as_retriever(similarity_top_k=10)
         
         # Récupération des nodes pour BM25
         nodes = list(self.index.docstore.docs.values())
@@ -113,7 +113,7 @@ class RAGEngine:
         if nodes:
             self.bm25_retriever = BM25Retriever.from_defaults(
                 nodes=nodes,
-                similarity_top_k=20
+                similarity_top_k=10
             )
             retrievers = [self.vector_retriever, self.bm25_retriever]
             logger.info("Recherche Hybride activée (Dense + Sparse).")
@@ -123,11 +123,11 @@ class RAGEngine:
 
         self.fusion_retriever = QueryFusionRetriever(
             retrievers,
-            similarity_top_k=20,
+            similarity_top_k=10,
             num_queries=1,  # Optimisation CA-4: Pas de query expansion (trop lent), juste fusion hybride
             mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=True,
-            verbose=True
+            verbose=False
         )
 
         # 7. Assemblage du Query Engine final

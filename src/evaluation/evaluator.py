@@ -1,13 +1,13 @@
 
 import logging
 import pandas as pd
+import warnings
 from typing import List, Dict
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.query_engine import BaseQueryEngine
 from ragas import EvaluationDataset
-# Note: In future ragas >= 1.0, use from ragas.metrics.collections import ...
-# Import standard des métriques (compatible avec LlamaIndexEmbeddingsWrapper)
+# Import standard des métriques
 from ragas.metrics import (
     Faithfulness,
     AnswerRelevancy,
@@ -15,11 +15,17 @@ from ragas.metrics import (
     ContextRecall,
 )
 
-from ragas.embeddings import LlamaIndexEmbeddingsWrapper
-
+from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 from ragas.integrations.llama_index import evaluate
 import phoenix as px
+
+# Filtrer les warnings de dépréciation pour CA-4
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Silence opentelemetry exporter errors (Phoenix connection refused)
+logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +36,8 @@ class ThesesEvaluator:
     def __init__(self, model: str = "gpt-4o"):
         self.llm = OpenAI(model=model)
         self.evaluator_llm = llm_factory(model=model, client=self.llm)
-        self.embeddings = LlamaIndexEmbeddingsWrapper(OpenAIEmbedding(model="text-embedding-3-small"))
+        # Utilisation de embedding_factory au lieu de LlamaIndexEmbeddingsWrapper pour compatibilité
+        self.embeddings = embedding_factory(model="openai/text-embedding-3-small")
         
         # Initialisation des métriques
         self.metrics = [
@@ -47,12 +54,12 @@ class ThesesEvaluator:
         """
         logger.info(f"Démarrage de l'évaluation Ragas sur {len(dataset)} questions...")
         
-        # Adaptation du dataset pour Ragas
+        # Adaptation du dataset pour Ragas (Mapping corrigé pour éviter input_value=None)
         formatted_dataset = []
         for item in dataset:
             formatted_dataset.append({
-                "question": item.get("question"),
-                "ground_truth": item.get("ground_truth"),
+                "user_input": item.get("question"),
+                "reference": item.get("ground_truth"),
             })
         
         try:

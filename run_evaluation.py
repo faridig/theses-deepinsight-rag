@@ -12,18 +12,34 @@ from src.evaluation.evaluator import ThesesEvaluator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Silence opentelemetry exporter errors
+logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
+
 def setup_phoenix():
     """Initialise Phoenix pour capturer les traces de l'évaluation."""
+    if os.getenv("DISABLE_PHOENIX") == "1":
+        logger.info("Phoenix désactivé via variable d'environnement.")
+        return
+
     try:
         import phoenix as px
-        if os.getenv("DISABLE_PHOENIX") != "1":
-            # On tente de se connecter à une instance existante ou on lance
+        # On tente de se connecter à une instance existante ou on lance
+        try:
+            px.active_session()
+        except Exception:
             try:
-                px.active_session()
-            except Exception:
                 px.launch_app()
+            except Exception as e:
+                logger.warning(f"Échec du lancement de Phoenix : {e}")
+                return
+        
+        try:
             set_global_handler("arize_phoenix")
             logger.info("Observabilité Phoenix activée pour l'évaluation.")
+        except Exception as e:
+            logger.warning(f"Échec de l'activation du handler Phoenix : {e}")
+    except ImportError:
+        logger.warning("Phoenix n'est pas installé.")
     except Exception as e:
         logger.warning(f"Impossible d'activer Phoenix : {e}")
 
