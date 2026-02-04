@@ -39,5 +39,25 @@
     {
         "question": "Quelle est la principale contribution théorique de la thèse 2023STRAB011 ?",
         "ground_truth": "La formulation d'un nouveau modèle de conductivité thermique pour les structures bidimensionnelles."
+    },
+    {
+        "question": "Quels sont les domaines d'application de la thèse 2024STRAB004 ?",
+        "ground_truth": "Les domaines d'application incluent la conception d'interfaces utilisateur et l'optimisation des systèmes de recommandation."
+    },
+    {
+        "question": "Comment la thèse 2023STRAB011 traite-t-elle la question de l'efficacité énergétique ?",
+        "ground_truth": "Elle propose l'utilisation de matériaux à changement de phase pour améliorer le stockage de l'énergie thermique."
+    },
+    {
+        "question": "Quels sont les principaux obstacles identifiés dans la thèse 2024PA131029 pour l'adoption de l'IA ?",
+        "ground_truth": "Les obstacles majeurs sont le manque de données de qualité et la résistance au changement des praticiens."
+    },
+    {
+        "question": "Résumez les résultats expérimentaux de la thèse 2023STRAB011.",
+        "ground_truth": "Les résultats montrent une augmentation de 15% de l'efficacité de transfert thermique par rapport aux modèles standards."
+    },
+    {
+        "question": "Quelle est l'approche éthique recommandée par l'auteur de la thèse 2024PA131029 ?",
+        "ground_truth": "L'approche recommandée est celle de l'IA centrée sur l'humain, garantissant la transparence et l'auditabilité des algorithmes."
     }
 ]

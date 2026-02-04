@@ -3,13 +3,16 @@ import logging
 import pandas as pd
 from typing import List, Dict
 from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.query_engine import BaseQueryEngine
+from ragas import EvaluationDataset
 from ragas.metrics import (
     Faithfulness,
     AnswerRelevancy,
     ContextPrecision,
     ContextRecall,
 )
+from ragas.embeddings import LlamaIndexEmbeddingsWrapper
 # Note: In future ragas >= 1.0, use from ragas.metrics.collections import ...
 
 from ragas.llms import llm_factory
@@ -25,11 +28,12 @@ class ThesesEvaluator:
     def __init__(self, model: str = "gpt-4o"):
         self.llm = OpenAI(model=model)
         self.evaluator_llm = llm_factory(model=model, client=self.llm)
+        self.embeddings = LlamaIndexEmbeddingsWrapper(OpenAIEmbedding(model="text-embedding-3-small"))
         
         # Initialisation des métriques
         self.metrics = [
             Faithfulness(llm=self.evaluator_llm),
-            AnswerRelevancy(llm=self.evaluator_llm),
+            AnswerRelevancy(llm=self.evaluator_llm, embeddings=self.embeddings),
             ContextPrecision(llm=self.evaluator_llm),
             ContextRecall(llm=self.evaluator_llm),
         ]
@@ -41,11 +45,20 @@ class ThesesEvaluator:
         """
         logger.info(f"Démarrage de l'évaluation Ragas sur {len(dataset)} questions...")
         
+        # Adaptation du dataset pour Ragas 0.4.x
+        formatted_dataset = []
+        for item in dataset:
+            formatted_dataset.append({
+                "user_input": item.get("question"),
+                "reference": item.get("ground_truth"),
+            })
+        
         try:
+            eval_dataset = EvaluationDataset.from_list(formatted_dataset)
             result = evaluate(
                 query_engine=query_engine,
                 metrics=self.metrics,
-                dataset=dataset
+                dataset=eval_dataset
             )
             return result
         except Exception as e:
