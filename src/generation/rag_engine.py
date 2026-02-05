@@ -23,15 +23,19 @@ from src.indexing.vector_service import VectorService
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Silence sélectif (Warnings & Télémétrie uniquement)
+# Silence sélectif (Warnings & Télémétrie uniquement) - Exigence Reviewer
 logging.getLogger("chromadb").setLevel(logging.WARNING)
 logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
+logging.getLogger("bm25s").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 load_dotenv()
 
 class RAGEngine:
     """
     Moteur RAG pour interroger les thèses avec Sentence Window Retrieval.
+    Optimisé pour la précision chirurgicale acronymes/termes techniques (CA-1).
     """
     def __init__(self, storage_path: str = "./storage/chroma", collection_name: str = "theses_collection"):
         # 1. Configuration du LLM et de l'Embedding
@@ -45,27 +49,22 @@ class RAGEngine:
         try:
             self.vector_service = VectorService(storage_path=storage_path, collection_name=collection_name)
             self.index = self.vector_service.index
-            
-            # Vérifier si l'index contient des documents (approximatif via chroma)
-            if self.vector_service.chroma_collection.count() == 0:
-                logger.warning("L'index Chroma est vide. Les réponses seront limitées ou absentes.")
-                
         except Exception as e:
             logger.error(f"Erreur lors du chargement de l'index : {e}")
             raise RuntimeError(f"Impossible d'initialiser le RAGEngine : {e}")
 
-        # 3. Pipeline de Post-Processing (CRITIQUE)
+        # 3. Pipeline de Post-Processing
         self.post_processors: List[BaseNodePostprocessor] = [
             MetadataReplacementPostProcessor(target_metadata_key="window"),
         ]
 
         # 4. Prompt Engineering (Français, Formel)
         self.qa_prompt_tmpl_str = (
-            "Tu es un assistant de recherche académique. "
+            "Tu es un assistant de recherche académique expert. "
             "Réponds à la question en utilisant uniquement les extraits de thèses fournis.\n"
             "Cite le titre et l'auteur pour chaque fait mentionné.\n"
-            "Si l'information n'est pas disponible dans le contexte fourni, "
-            "réponds : 'Je suis désolé, mais je ne trouve pas d'information à ce sujet dans les thèses analysées.'\n"
+            "Sois extrêmement précis sur les termes techniques et acronymes (ex: L2TI).\n"
+            "Si l'information n'est pas disponible, réponds : 'Je suis désolé, mais je ne trouve pas d'information à ce sujet dans les thèses analysées.'\n"
             "---------------------\n"
             "CONTEXTE :\n"
             "{context_str}\n"
@@ -73,6 +72,81 @@ class RAGEngine:
             "QUESTION : {query_str}\n"
             "RÉPONSE : "
         )
+        self.qa_prompt_tmpl = PromptTemplate(self.qa_prompt_tmpl_str)
+
+        # 5. Configuration du Reranker Cohere (PBI-008)
+        cohere_api_key = os.getenv("COHERE_API_KEY")
+        self.reranker = CohereRerank(
+            api_key=cohere_api_key,
+            model="rerank-multilingual-v3.0",
+            top_n=5
+        )
+
+        # 6. Assemblage du Retriever Fusionné (Hybrid Search)
+        # On augmente le top_k initial pour donner plus de matière au RRF (Reviewer Feedback)
+        self.vector_retriever = self.index.as_retriever(similarity_top_k=20)
+        
+        # Récupération directe des nodes via le docstore (Exigence Reviewer 3)
+        # On vérifie plusieurs sources possibles de nodes dans le storage_context
+        nodes = list(self.vector_service.storage_context.docstore.docs.values())
+        
+        if not nodes:
+            logger.info("Docstore vide, fallback sur Chroma pour reconstruction BM25...")
+            try:
+                chroma_data = self.vector_service.chroma_collection.get()
+                if chroma_data and chroma_data.get('ids'):
+                    ids = chroma_data.get('ids', [])
+                    documents = chroma_data.get('documents', []) or []
+                    metadatas = chroma_data.get('metadatas', []) or []
+                    
+                    for i in range(len(ids)):
+                        text = documents[i] if i < len(documents) else ""
+                        metadata = metadatas[i] if (metadatas and i < len(metadatas)) else {}
+                        nodes.append(TextNode(text=text, id_=ids[i], metadata=metadata or {}))
+                    
+                    # Persistance immédiate
+                    self.vector_service.storage_context.docstore.add_documents(nodes)
+                    self.vector_service.storage_context.persist(persist_dir=storage_path)
+            except Exception as e:
+                logger.error(f"Échec critique de récupération des nodes : {e}")
+
+        if nodes:
+            # BM25Retriever optimisé pour les termes exacts
+            self.bm25_retriever = BM25Retriever.from_defaults(
+                nodes=nodes,
+                similarity_top_k=20
+            )
+            retrievers = [self.vector_retriever, self.bm25_retriever]
+            logger.info(f"Recherche Hybride activée avec {len(nodes)} nodes.")
+        else:
+            logger.warning("BM25 désactivé (aucun node trouvé).")
+            retrievers = [self.vector_retriever]
+
+        # Fusion RRF configurée pour ne pas écraser le Sparse (top_k=20 -> top_k=10)
+        self.fusion_retriever = QueryFusionRetriever(
+            retrievers,
+            similarity_top_k=10,
+            num_queries=1,
+            mode=FUSION_MODES.RECIPROCAL_RANK,
+            use_async=True,
+            verbose=False
+        )
+
+        # 7. Assemblage du Query Engine final
+        all_post_processors: List[BaseNodePostprocessor] = [
+            *self.post_processors,
+            self.reranker
+        ]
+        
+        self.query_engine = RetrieverQueryEngine(
+            retriever=self.fusion_retriever,
+            node_postprocessors=all_post_processors
+        )
+        
+        self.query_engine.update_prompts(
+            {"response_synthesizer:text_qa_template": self.qa_prompt_tmpl}
+        )
+
         self.qa_prompt_tmpl = PromptTemplate(self.qa_prompt_tmpl_str)
 
         # 5. Configuration du Reranker Cohere (PBI-008)

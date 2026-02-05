@@ -30,8 +30,9 @@ warnings.filterwarnings("ignore", category=UserWarning)
 logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
 # Niveau ERROR pour Ragas (Exigence Reviewer 2 : Transparence des logs)
 logging.getLogger("ragas").setLevel(logging.ERROR)
-# Silence Pydantic noise
+# Silence Pydantic & HTTPX noise
 logging.getLogger("pydantic").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,10 @@ class ThesesEvaluator:
         
         # Réparation AnswerRelevancy (Exigence Reviewer 1 : Compatibilité stable)
         # Utilisation de LangchainEmbeddingsWrapper avec langchain_openai
+        # Note: On s'assure d'utiliser le bon wrapper pour éviter le crash Collections
+        from langchain_openai import OpenAIEmbeddings as LangchainOpenAIEmbeddings
+        from ragas.embeddings import LangchainEmbeddingsWrapper
+        
         base_embeddings = LangchainOpenAIEmbeddings(model="text-embedding-3-small")
         self.embeddings = LangchainEmbeddingsWrapper(base_embeddings)
         
@@ -76,10 +81,11 @@ class ThesesEvaluator:
         try:
             eval_dataset = EvaluationDataset.from_list(formatted_dataset)
             
+            # Configuration robuste (CA-1) - Workers réduit pour éviter Cohere 429
             run_config = RunConfig(
                 max_retries=3,
                 timeout=180,
-                max_workers=4
+                max_workers=2
             )
             
             result = evaluate(

@@ -12,12 +12,19 @@ from src.evaluation.evaluator import ThesesEvaluator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Silence sélectif (Warnings & Télémétrie) - Exigence Reviewer 2
+# Silence sélectif (Warnings & Télémétrie) - Exigence Reviewer 2 & 3
 logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
-logging.getLogger("ragas").setLevel(logging.ERROR)  # ERROR maintenu, silence warnings
+logging.getLogger("ragas").setLevel(logging.ERROR)
 logging.getLogger("pydantic").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("chromadb").setLevel(logging.WARNING)
+logging.getLogger("bm25s").setLevel(logging.WARNING)
+
+# Filtrage global des warnings de dépréciation (Silence Technique)
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 def setup_phoenix():
     """Initialise Phoenix pour capturer les traces de l'évaluation."""
