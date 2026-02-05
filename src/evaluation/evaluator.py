@@ -81,11 +81,12 @@ class ThesesEvaluator:
         try:
             eval_dataset = EvaluationDataset.from_list(formatted_dataset)
             
-            # Configuration robuste (CA-1) - Workers réduit pour éviter Cohere 429
+            # Configuration robuste (Directive Alpha)
+            # max_workers=1 exigé pour les clés Cohere Trial (évite 429)
             run_config = RunConfig(
-                max_retries=3,
-                timeout=180,
-                max_workers=2
+                max_retries=5,
+                timeout=240,
+                max_workers=1
             )
             
             result = evaluate(

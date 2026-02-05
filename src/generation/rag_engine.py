@@ -19,47 +19,119 @@ from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import TextNode
 from src.indexing.vector_service import VectorService
 
-# Configuration des logs
-logging.basicConfig(level=logging.INFO)
+# Configuration des logs - Silence Technique (Directive Alpha)
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# Silence sélectif (Warnings & Télémétrie uniquement) - Exigence Reviewer
-logging.getLogger("chromadb").setLevel(logging.WARNING)
+# Silence sélectif pour les bibliothèques bruyantes
+for lib in ["chromadb", "bm25s", "httpx", "urllib3", "llama_index"]:
+    logging.getLogger(lib).setLevel(logging.WARNING)
 logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
-logging.getLogger("bm25s").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 load_dotenv()
 
 class RAGEngine:
     """
     Moteur RAG pour interroger les thèses avec Sentence Window Retrieval.
-    Optimisé pour la précision chirurgicale acronymes/termes techniques (CA-1).
+    Optimisé pour la précision chirurgicale acronymes/termes techniques.
     """
     def __init__(self, storage_path: str = "./storage/chroma", collection_name: str = "theses_collection"):
-        # 1. Configuration du LLM et de l'Embedding
-        if not os.getenv("OPENAI_API_KEY"):
-            logger.warning("OPENAI_API_KEY non trouvée dans l'environnement.")
+        # 1. Configuration des modèles
+        self._setup_settings()
         
-        Settings.llm = OpenAI(model="gpt-4o-mini")
-        Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
-        
-        # 2. Chargement de l'index via VectorService
+        # 2. Chargement de l'index
         try:
             self.vector_service = VectorService(storage_path=storage_path, collection_name=collection_name)
             self.index = self.vector_service.index
         except Exception as e:
-            logger.error(f"Erreur lors du chargement de l'index : {e}")
+            logger.error(f"Échec initialisation VectorService: {e}")
             raise RuntimeError(f"Impossible d'initialiser le RAGEngine : {e}")
 
-        # 3. Pipeline de Post-Processing
-        self.post_processors: List[BaseNodePostprocessor] = [
+        # 3. Composants du Pipeline
+        self.post_processors = [
             MetadataReplacementPostProcessor(target_metadata_key="window"),
         ]
+        
+        # 4. Configuration des Retrievers (Hybrid Search)
+        self.fusion_retriever = self._setup_retrievers(storage_path)
+        
+        # 5. Reranker Cohere
+        self.reranker = self._setup_reranker()
+        
+        # 6. Assemblage du Query Engine
+        self._setup_query_engine()
 
-        # 4. Prompt Engineering (Français, Formel)
-        self.qa_prompt_tmpl_str = (
+    def _setup_settings(self):
+        if not os.getenv("OPENAI_API_KEY"):
+            logger.warning("OPENAI_API_KEY manquante.")
+        Settings.llm = OpenAI(model="gpt-4o-mini")
+        Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+
+    def _setup_retrievers(self, storage_path: str):
+        # Top_k=20 exigé pour la précision technique (PBI-006)
+        similarity_top_k = 20
+        
+        vector_retriever = self.index.as_retriever(similarity_top_k=similarity_top_k)
+        
+        # Récupération des nodes pour BM25
+        nodes = list(self.vector_service.storage_context.docstore.docs.values())
+        if not nodes:
+            nodes = self._recover_nodes_from_chroma(storage_path)
+            
+        retrievers = [vector_retriever]
+        if nodes:
+            bm25_retriever = BM25Retriever.from_defaults(
+                nodes=nodes,
+                similarity_top_k=similarity_top_k
+            )
+            retrievers.append(bm25_retriever)
+            logger.info(f"Recherche Hybride activée ({len(nodes)} nodes).")
+        else:
+            logger.warning("BM25 désactivé (aucun node trouvé).")
+
+        return QueryFusionRetriever(
+            retrievers,
+            similarity_top_k=similarity_top_k,
+            num_queries=1,
+            mode=FUSION_MODES.RECIPROCAL_RANK,
+            use_async=True,
+            verbose=False
+        )
+
+    def _recover_nodes_from_chroma(self, storage_path: str):
+        logger.info("Docstore vide, récupération depuis Chroma...")
+        nodes = []
+        try:
+            chroma_data = self.vector_service.chroma_collection.get()
+            if chroma_data and chroma_data.get('ids'):
+                ids = chroma_data.get('ids', [])
+                documents = chroma_data.get('documents', []) or []
+                metadatas = chroma_data.get('metadatas', []) or []
+                
+                for i in range(len(ids)):
+                    text = documents[i] if i < len(documents) else ""
+                    metadata = metadatas[i] if (metadatas and i < len(metadatas)) else {}
+                    nodes.append(TextNode(text=text, id_=ids[i], metadata=metadata or {}))
+                
+                self.vector_service.storage_context.docstore.add_documents(nodes)
+                self.vector_service.storage_context.persist(persist_dir=storage_path)
+        except Exception as e:
+            logger.error(f"Erreur récupération nodes: {e}")
+        return nodes
+
+    def _setup_reranker(self):
+        cohere_api_key = os.getenv("COHERE_API_KEY")
+        if not cohere_api_key:
+            logger.warning("COHERE_API_KEY manquante, Reranking désactivé.")
+            return None
+        return CohereRerank(
+            api_key=cohere_api_key,
+            model="rerank-multilingual-v3.0",
+            top_n=5
+        )
+
+    def _setup_query_engine(self):
+        qa_prompt_tmpl_str = (
             "Tu es un assistant de recherche académique expert. "
             "Réponds à la question en utilisant uniquement les extraits de thèses fournis.\n"
             "Cite le titre et l'auteur pour chaque fait mentionné.\n"
@@ -72,172 +144,27 @@ class RAGEngine:
             "QUESTION : {query_str}\n"
             "RÉPONSE : "
         )
-        self.qa_prompt_tmpl = PromptTemplate(self.qa_prompt_tmpl_str)
+        qa_prompt_tmpl = PromptTemplate(qa_prompt_tmpl_str)
 
-        # 5. Configuration du Reranker Cohere (PBI-008)
-        cohere_api_key = os.getenv("COHERE_API_KEY")
-        self.reranker = CohereRerank(
-            api_key=cohere_api_key,
-            model="rerank-multilingual-v3.0",
-            top_n=5
-        )
-
-        # 6. Assemblage du Retriever Fusionné (Hybrid Search)
-        # On augmente le top_k initial pour donner plus de matière au RRF (Reviewer Feedback)
-        self.vector_retriever = self.index.as_retriever(similarity_top_k=20)
-        
-        # Récupération directe des nodes via le docstore (Exigence Reviewer 3)
-        # On vérifie plusieurs sources possibles de nodes dans le storage_context
-        nodes = list(self.vector_service.storage_context.docstore.docs.values())
-        
-        if not nodes:
-            logger.info("Docstore vide, fallback sur Chroma pour reconstruction BM25...")
-            try:
-                chroma_data = self.vector_service.chroma_collection.get()
-                if chroma_data and chroma_data.get('ids'):
-                    ids = chroma_data.get('ids', [])
-                    documents = chroma_data.get('documents', []) or []
-                    metadatas = chroma_data.get('metadatas', []) or []
-                    
-                    for i in range(len(ids)):
-                        text = documents[i] if i < len(documents) else ""
-                        metadata = metadatas[i] if (metadatas and i < len(metadatas)) else {}
-                        nodes.append(TextNode(text=text, id_=ids[i], metadata=metadata or {}))
-                    
-                    # Persistance immédiate
-                    self.vector_service.storage_context.docstore.add_documents(nodes)
-                    self.vector_service.storage_context.persist(persist_dir=storage_path)
-            except Exception as e:
-                logger.error(f"Échec critique de récupération des nodes : {e}")
-
-        if nodes:
-            # BM25Retriever optimisé pour les termes exacts
-            self.bm25_retriever = BM25Retriever.from_defaults(
-                nodes=nodes,
-                similarity_top_k=20
-            )
-            retrievers = [self.vector_retriever, self.bm25_retriever]
-            logger.info(f"Recherche Hybride activée avec {len(nodes)} nodes.")
-        else:
-            logger.warning("BM25 désactivé (aucun node trouvé).")
-            retrievers = [self.vector_retriever]
-
-        # Fusion RRF configurée pour ne pas écraser le Sparse (top_k=20 -> top_k=10)
-        self.fusion_retriever = QueryFusionRetriever(
-            retrievers,
-            similarity_top_k=10,
-            num_queries=1,
-            mode=FUSION_MODES.RECIPROCAL_RANK,
-            use_async=True,
-            verbose=False
-        )
-
-        # 7. Assemblage du Query Engine final
-        all_post_processors: List[BaseNodePostprocessor] = [
-            *self.post_processors,
-            self.reranker
-        ]
-        
+        all_post_processors = [*self.post_processors]
+        if self.reranker:
+            all_post_processors.append(self.reranker)
+            
         self.query_engine = RetrieverQueryEngine(
             retriever=self.fusion_retriever,
             node_postprocessors=all_post_processors
         )
         
         self.query_engine.update_prompts(
-            {"response_synthesizer:text_qa_template": self.qa_prompt_tmpl}
+            {"response_synthesizer:text_qa_template": qa_prompt_tmpl}
         )
 
-        self.qa_prompt_tmpl = PromptTemplate(self.qa_prompt_tmpl_str)
-
-        # 5. Configuration du Reranker Cohere (PBI-008)
-        cohere_api_key = os.getenv("COHERE_API_KEY")
-        if not cohere_api_key:
-            logger.warning("COHERE_API_KEY non trouvée dans l'environnement. Le Reranking Cohere risque d'échouer.")
-        
-        self.reranker = CohereRerank(
-            api_key=cohere_api_key,
-            model="rerank-multilingual-v3.0",
-            top_n=5
-        )
-
-        # 6. Assemblage du Retriever Fusionné (PBI-010 - Hybrid Search)
-        self.vector_retriever = self.index.as_retriever(similarity_top_k=5)
-        
-        # Récupération directe des nodes via le docstore (Exigence Reviewer 3 : Pas de reconstruction inutile)
-        nodes = list(self.vector_service.storage_context.docstore.docs.values())
-        
-        if not nodes:
-            logger.info("Docstore vide ou non persistant, récupération des nodes depuis Chroma pour BM25...")
-            try:
-                chroma_data = self.vector_service.chroma_collection.get()
-                if chroma_data and chroma_data.get('ids'):
-                    ids = chroma_data.get('ids', [])
-                    documents = chroma_data.get('documents', []) or []
-                    metadatas = chroma_data.get('metadatas', []) or []
-                    
-                    for i in range(len(ids)):
-                        text = documents[i] if i < len(documents) else ""
-                        metadata = metadatas[i] if (metadatas and i < len(metadatas)) else {}
-                        nodes.append(TextNode(
-                            text=text,
-                            id_=ids[i],
-                            metadata=metadata or {}
-                        ))
-                    
-                    # Correction Persistance
-                    self.vector_service.storage_context.docstore.add_documents(nodes)
-                    self.vector_service.storage_context.persist(persist_dir=storage_path)
-                    logger.info("Docstore persisté avec succès.")
-            except Exception as e:
-                logger.error(f"Erreur lors de la récupération des nodes : {e}")
-
-        if nodes:
-            self.bm25_retriever = BM25Retriever.from_defaults(
-                nodes=nodes,
-                similarity_top_k=5
-            )
-            retrievers = [self.vector_retriever, self.bm25_retriever]
-            logger.info("Recherche Hybride activée (Dense + Sparse).")
-        else:
-            logger.warning("BM25 désactivé (aucun node trouvé). Recherche Dense uniquement.")
-            retrievers = [self.vector_retriever]
-
-        self.fusion_retriever = QueryFusionRetriever(
-            retrievers,
-            similarity_top_k=5,
-            num_queries=1,  # Optimisation CA-4: Pas de query expansion (trop lent), juste fusion hybride
-            mode=FUSION_MODES.RECIPROCAL_RANK,
-            use_async=True,
-            verbose=False
-        )
-
-        # 7. Assemblage du Query Engine final
-        # Note: On fusionne les post-processeurs
-        all_post_processors: List[BaseNodePostprocessor] = [
-            *self.post_processors,
-            self.reranker
-        ]
-        
-        self.query_engine = RetrieverQueryEngine(
-            retriever=self.fusion_retriever,
-            node_postprocessors=all_post_processors
-        )
-        
-        # Mise à jour du prompt
-        self.query_engine.update_prompts(
-            {"response_synthesizer:text_qa_template": self.qa_prompt_tmpl}
-        )
-        
     def ask(self, question: str):
-        """
-        Exécute une requête RAG et retourne la réponse.
-        """
         if not question or not question.strip():
             return "Veuillez poser une question valide."
         
         try:
-            response = self.query_engine.query(question)
-            return response
+            return self.query_engine.query(question)
         except Exception as e:
-            logger.error(f"Erreur lors de la génération de la réponse : {e}")
-            return f"Une erreur est survenue lors du traitement de votre question : {e}"
+            logger.error(f"Erreur génération réponse: {e}")
+            return f"Une erreur est survenue : {e}"

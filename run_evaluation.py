@@ -8,20 +8,18 @@ from llama_index.core import set_global_handler
 from src.generation.rag_engine import RAGEngine
 from src.evaluation.evaluator import ThesesEvaluator
 
-# Configuration des logs
-logging.basicConfig(level=logging.INFO)
+# Configuration des logs - Silence Technique strict
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# Silence sélectif (Warnings & Télémétrie) - Exigence Reviewer 2 & 3
-logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
-logging.getLogger("ragas").setLevel(logging.ERROR)
-logging.getLogger("pydantic").setLevel(logging.ERROR)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("urllib3").setLevel(logging.WARNING)
-logging.getLogger("chromadb").setLevel(logging.WARNING)
-logging.getLogger("bm25s").setLevel(logging.WARNING)
+# Silence sélectif pour réduire la pollution visuelle
+SILENT_LOGGERS = [
+    "opentelemetry", "ragas", "pydantic", "httpx", "urllib3", 
+    "chromadb", "bm25s", "llama_index", "openai"
+]
+for logger_name in SILENT_LOGGERS:
+    logging.getLogger(logger_name).setLevel(logging.ERROR)
 
-# Filtrage global des warnings de dépréciation (Silence Technique)
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -83,22 +81,20 @@ async def main():
         results = evaluator.evaluate_engine(engine.query_engine, dataset)
         
         if results:
-            # 5. Affichage des résultats
             print("\n=== RÉSULTATS DE L'ÉVALUATION RAGAS ===")
             print(results)
             
-            # 6. Export vers Phoenix
             evaluator.export_to_phoenix(results)
             
-            # Sauvegarde locale
             with open("evaluation_report.json", "w", encoding="utf-8") as f:
                 json.dump(results.scores, f, indent=4)
-            logger.info("Rapport d'évaluation sauvegardé dans evaluation_report.json")
+            logger.info("Rapport d'évaluation sauvegardé.")
         else:
-            logger.warning("L'évaluation n'a produit aucun résultat exploitable.")
+            logger.error("L'évaluation n'a produit aucun résultat.")
             
     except Exception as e:
-        logger.warning(f"L'évaluation a été interrompue : {e}")
+        logger.error(f"Échec critique de l'évaluation : {e}")
+        # On ne re-raise pas pour éviter le traceback en console
 
 if __name__ == "__main__":
     asyncio.run(main())
