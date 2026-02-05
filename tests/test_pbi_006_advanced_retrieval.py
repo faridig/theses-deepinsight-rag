@@ -27,8 +27,9 @@ class TestAdvancedRetrieval:
             args, kwargs = mock_fusion.call_args
             # The first arg should be a list containing the base retriever
             assert mock_base_retriever in args[0]
-            assert kwargs['num_queries'] == 3
-            assert kwargs['similarity_top_k'] == 20
+            # CA-4 Optimization: num_queries reduced to 1, top_k reduced to 5
+            assert kwargs['num_queries'] == 1
+            assert kwargs['similarity_top_k'] == 5
             # mode is an enum
             assert "RECIPROCAL_RANK" in str(kwargs['mode'])
             assert kwargs['use_async'] is True
