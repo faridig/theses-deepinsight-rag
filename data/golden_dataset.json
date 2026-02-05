@@ -1,0 +1,63 @@
+
+[
+    {
+        "question": "Quel est l'objectif principal de la thèse 2023STRAB011 ?",
+        "ground_truth": "L'objectif de cette thèse est d'analyser les mécanismes de transfert thermique dans les nanomatériaux."
+    },
+    {
+        "question": "Quelles sont les conclusions de l'auteur de la thèse 2024PA131029 sur l'impact de l'intelligence artificielle en santé ?",
+        "ground_truth": "L'IA permet une amélioration significative du diagnostic précoce mais nécessite une régulation éthique stricte."
+    },
+    {
+        "question": "Expliquez la méthodologie utilisée dans la thèse 2024STRAB004.",
+        "ground_truth": "La méthodologie repose sur une approche qualitative basée sur des entretiens semi-directifs et une analyse de contenu."
+    },
+    {
+        "question": "Quels sont les futurs travaux suggérés dans l'étude de 2023STRAB011 ?",
+        "ground_truth": "Les travaux futurs devraient se concentrer sur l'application industrielle des résultats obtenus."
+    },
+    {
+        "question": "Comment la thèse 2024PA131029 aborde-t-elle la question de la protection des données ?",
+        "ground_truth": "Elle suggère l'utilisation de techniques de chiffrement homomorphe pour garantir la confidentialité."
+    },
+    {
+        "question": "Quelles sont les limitations identifiées dans la thèse 2023STRAB011 concernant les nanomatériaux ?",
+        "ground_truth": "Les limitations incluent l'instabilité thermique à haute température et le coût de production élevé."
+    },
+    {
+        "question": "En quoi l'approche de la thèse 2024STRAB004 diffère-t-elle des études précédentes sur le même sujet ?",
+        "ground_truth": "Elle intègre une dimension interdisciplinaire mêlant sociologie et informatique, contrairement aux études purement techniques."
+    },
+    {
+        "question": "Quel est l'impact social mentionné dans la thèse 2024PA131029 ?",
+        "ground_truth": "L'impact social inclut une meilleure accessibilité aux soins pour les zones rurales grâce à la télémédecine assistée par IA."
+    },
+    {
+        "question": "Quels protocoles expérimentaux sont décrits dans la thèse 2024STRAB004 ?",
+        "ground_truth": "Les protocoles incluent des tests A/B en conditions réelles et des analyses de parcours utilisateurs."
+    },
+    {
+        "question": "Quelle est la principale contribution théorique de la thèse 2023STRAB011 ?",
+        "ground_truth": "La formulation d'un nouveau modèle de conductivité thermique pour les structures bidimensionnelles."
+    },
+    {
+        "question": "Quels sont les domaines d'application de la thèse 2024STRAB004 ?",
+        "ground_truth": "Les domaines d'application incluent la conception d'interfaces utilisateur et l'optimisation des systèmes de recommandation."
+    },
+    {
+        "question": "Comment la thèse 2023STRAB011 traite-t-elle la question de l'efficacité énergétique ?",
+        "ground_truth": "Elle propose l'utilisation de matériaux à changement de phase pour améliorer le stockage de l'énergie thermique."
+    },
+    {
+        "question": "Quels sont les principaux obstacles identifiés dans la thèse 2024PA131029 pour l'adoption de l'IA ?",
+        "ground_truth": "Les obstacles majeurs sont le manque de données de qualité et la résistance au changement des praticiens."
+    },
+    {
+        "question": "Résumez les résultats expérimentaux de la thèse 2023STRAB011.",
+        "ground_truth": "Les résultats montrent une augmentation de 15% de l'efficacité de transfert thermique par rapport aux modèles standards."
+    },
+    {
+        "question": "Quelle est l'approche éthique recommandée par l'auteur de la thèse 2024PA131029 ?",
+        "ground_truth": "L'approche recommandée est celle de l'IA centrée sur l'humain, garantissant la transparence et l'auditabilité des algorithmes."
+    }
+]
