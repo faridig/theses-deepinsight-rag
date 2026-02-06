@@ -157,7 +157,12 @@ class RAGEngine:
                 # Fallback pour les environnements avec une boucle déjà active
                 return self.query_engine.query(question)
         except Exception as e:
-            if "429" in str(e):
-                return "Le service est temporairement saturé. Veuillez réessayer."
+            err_msg = str(e).lower()
+            if "429" in err_msg or "rate limit" in err_msg:
+                return "Le service est temporairement saturé (Limite API). Veuillez réessayer dans une minute."
+            if "authentication" in err_msg or "api key" in err_msg:
+                return "Erreur d'authentification aux services de recherche."
+            
+            # Pas de traceback dans la console, log uniquement
             logger.error(f"Erreur RAG: {e}")
-            return "Une erreur technique est survenue."
+            return "Une erreur technique est survenue lors de la recherche."

@@ -72,29 +72,49 @@ def setup_observability():
         if is_occupied:
             if is_phoenix_healthy(UI_PORT):
                 logger.info("ℹ️ Phoenix opérationnel détecté.")
-                set_global_handler("arize_phoenix")
+                try:
+                    set_global_handler("arize_phoenix")
+                except Exception:
+                    logger.info("ℹ️ Instrumentation Phoenix ignorée (déjà configurée ou port occupé).")
                 return
             else:
-                logger.warning(f"⚠️ Port {GRPC_PORT} occupé mais Phoenix injoignable. Instrumentation désactivée.")
+                logger.info("ℹ️ Phoenix non disponible - Continuation sans monitoring.")
                 return
 
         # Tentative de lancement
         try:
-            px.launch_app()
+            # On redirige stdout/stderr vers devnull pour phoenix.launch_app() 
+            # car certains logs internes ne respectent pas le logging standard
+            with open(os.devnull, 'w') as f:
+                original_stdout = sys.stdout
+                original_stderr = sys.stderr
+                try:
+                    sys.stdout = f
+                    sys.stderr = f
+                    px.launch_app()
+                finally:
+                    sys.stdout = original_stdout
+                    sys.stderr = original_stderr
+            
             # On attend un tout petit peu que le serveur démarre
             import time
             time.sleep(1)
         except Exception:
+            logger.info("ℹ️ Phoenix non disponible - Continuation sans monitoring.")
             return
 
         # Vérification finale avant instrumentation
         if is_phoenix_healthy(UI_PORT):
-            set_global_handler("arize_phoenix")
-            logger.info("✅ Observabilité Phoenix activée.")
+            try:
+                set_global_handler("arize_phoenix")
+                logger.info("✅ Observabilité Phoenix activée.")
+            except Exception:
+                logger.info("ℹ️ Phoenix non disponible - Continuation sans monitoring.")
         else:
-            logger.warning("⚠️ Phoenix ne répond pas. Instrumentation désactivée.")
+            logger.info("ℹ️ Phoenix non disponible - Continuation sans monitoring.")
         
     except Exception:
+        # Silence total absolu (Directive Alpha)
         pass
 
 setup_observability()

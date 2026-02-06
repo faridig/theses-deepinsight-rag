@@ -24,25 +24,30 @@ def setup_phoenix():
 
     try:
         import phoenix as px
-        # On tente de lancer ou de récupérer la session
-        session = px.launch_app()
+        # Redirection vers devnull pour étouffer les sorties parasites de px.launch_app()
+        import sys
+        with open(os.devnull, 'w') as f:
+            old_stdout, old_stderr = sys.stdout, sys.stderr
+            try:
+                sys.stdout, sys.stderr = f, f
+                px.launch_app()
+            finally:
+                sys.stdout, sys.stderr = old_stdout, old_stderr
         
-        # Vérification sommaire de santé (port 6006) avant instrumentation
+        # Vérification santé avant instrumentation
         import urllib.request
         try:
             with urllib.request.urlopen("http://127.0.0.1:6006/", timeout=1) as response:
                 if response.status == 200:
                     set_global_handler("arize_phoenix")
-                    if session:
-                        logger.info(f"Phoenix actif: {session.url}")
-                    return session
+                    logger.info("ℹ️ Phoenix actif.")
+                    return True
         except Exception:
             pass
             
-        logger.warning("Phoenix lancé mais port 6006 injoignable. Instrumentation désactivée.")
-        return session
-    except Exception as e:
-        # Pas de traceback en console (Directive Alpha)
+        logger.info("ℹ️ Phoenix non disponible - Continuation sans monitoring.")
+        return None
+    except Exception:
         return None
 
 async def main():
