@@ -22,16 +22,16 @@ class TestAdvancedRetrieval:
             # Initialize engine
             _ = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")
             
-            # 1. Vérification du pool de candidats (PBI-006 : top_k=20 exigé pour la précision)
-            mock_index.as_retriever.assert_called_with(similarity_top_k=20)
+            # 1. Vérification du pool de candidats (Optimisation Sprint 7 : top_k=12 pour CA-4)
+            mock_index.as_retriever.assert_called_with(similarity_top_k=12)
             
             # 2. Vérification de QueryFusionRetriever (Optimisation CA-4)
             mock_fusion.assert_called_once()
             _, fusion_kwargs = mock_fusion.call_args
             # num_queries=1 pour éviter l'expansion coûteuse
             assert fusion_kwargs['num_queries'] == 1
-            # similarity_top_k=10 pour le compromis vitesse/reranking
-            assert fusion_kwargs['similarity_top_k'] == 10
+            # similarity_top_k=8 pour le compromis vitesse/reranking (Sprint 7)
+            assert fusion_kwargs['similarity_top_k'] == 8
             assert "RECIPROCAL_RANK" in str(fusion_kwargs['mode'])
             assert fusion_kwargs['use_async'] is True
             
