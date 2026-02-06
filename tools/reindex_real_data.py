@@ -74,7 +74,8 @@ def reindex_real_data():
                 "date": metadata["date"],
                 "discipline": metadata["discipline"]
             }
-            nodes = parser.parse_pdf(str(pdf_path), is_dev=True, extra_metadata=extra_meta)
+            # PBI-011: Utilisation du mode full_parse (is_dev=False) pour une indexation exhaustive
+            nodes = parser.parse_pdf(str(pdf_path), is_dev=False, extra_metadata=extra_meta)
             
             all_nodes.extend(nodes)
             logger.info(f"OK : {len(nodes)} nœuds extraits pour {thesis_id}")

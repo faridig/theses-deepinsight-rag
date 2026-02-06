@@ -38,13 +38,13 @@ class ThesisParser:
             original_text_metadata_key="original_text",
         )
 
-    def parse_pdf(self, file_path: str, is_dev: bool = True, extra_metadata: Optional[Dict] = None) -> List[BaseNode]:
+    def parse_pdf(self, file_path: str, is_dev: bool = False, extra_metadata: Optional[Dict] = None) -> List[BaseNode]:
         """
         Parses a PDF file using LlamaParse and returns a list of Nodes.
         
         Args:
             file_path: Path to the PDF file.
-            is_dev: If True, limits parsing to the first 10 pages to save quota.
+            is_dev: If True, limits parsing to the first 20 pages to save quota. Defaults to False.
             extra_metadata: Optional metadata to add to the documents before node creation.
             
         Returns:
@@ -54,17 +54,22 @@ class ThesisParser:
             raise ValueError("LLAMA_CLOUD_API_KEY must be provided or set in environment.")
             
         # Initialize LlamaParse
-        # Optimisation : On utilise le mode 'balanced' ou standard pour plus de stabilité
+        # Optimisation : On utilise le mode 'markdown' pour une meilleure structure
         parser_args = {
             "api_key": self.api_key,
             "result_type": "markdown",
             "verbose": True,
-            "language": "fr", # On précise la langue pour CA-1
+            "language": "fr",
+            "num_workers": 4, # Accélération pour les documents longs
         }
         
         if is_dev:
-            # On passe à 20 pages pour assurer d'avoir l'introduction et les objectifs (CA-1)
+            # Mode développement : limitation pour économiser les crédits
             parser_args["target_pages"] = "0-19"
+        else:
+            # PBI-011: Parsing intégral sans limitation
+            # En omettant target_pages, LlamaParse traite tout le document
+            pass
             
         parser = LlamaParse(**parser_args)
         
@@ -81,11 +86,9 @@ class ThesisParser:
         """
         if extra_metadata:
             for doc in documents:
+                # PBI-011: On enrichit les métadonnées sans modifier le texte source (Shadow Metadata prevention)
                 doc.metadata.update(extra_metadata)
-                # On injecte uniquement l'ID et le Titre dans le texte pour aider le BM25 (CA-1)
-                # Sans polluer avec des résumés pré-rédigés
-                header = f"[THÈSE ID: {extra_metadata.get('id')}] [TITRE: {extra_metadata.get('titre')}]\n"
-                doc.set_content(header + doc.get_content())
+                
         return self.node_parser.get_nodes_from_documents(documents)
 
     def save_nodes(self, nodes: List[BaseNode], storage_dir: str = "storage"):
