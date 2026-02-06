@@ -6,8 +6,13 @@ import phoenix as px
 from llama_index.core import set_global_handler
 from src.generation.rag_engine import RAGEngine
 
+# Configuration des logs
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger("DeepInsight")
+
 # 1. Stratégie Radicale : Silence total des logs OpenTelemetry
 logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
+logging.getLogger("phoenix").setLevel(logging.ERROR)
 
 def check_port_occupancy(port: int):
     """
@@ -54,7 +59,6 @@ def is_phoenix_healthy(port: int = 6006) -> bool:
 # Configuration de l'instrumentation Phoenix
 def setup_observability():
     if os.getenv("DISABLE_PHOENIX") == "1":
-        print("ℹ️ Observabilité désactivée par DISABLE_PHOENIX=1")
         return
 
     try:
@@ -67,35 +71,64 @@ def setup_observability():
         
         if is_occupied:
             if is_phoenix_healthy(UI_PORT):
-                print(f"ℹ️ Phoenix sain détecté sur le port {GRPC_PORT} (Multi-Stack). Connexion.")
-                set_global_handler("arize_phoenix")
+                logger.info("ℹ️ Phoenix opérationnel détecté.")
+                try:
+                    set_global_handler("arize_phoenix")
+                except Exception:
+                    logger.info("ℹ️ Instrumentation Phoenix ignorée (déjà configurée ou port occupé).")
                 return
             else:
-                print(f"🚨 Incident gRPC Port {GRPC_PORT} : [IPv4:{report['ipv4']}, IPv6:{report['ipv6']}, Bindable:{report['bindable']}]")
-                print(f"Détail : {report['error']}")
-                print("⚠️ Désactivation de l'instrumentation pour éviter tout conflit.")
+                logger.info("ℹ️ Phoenix non disponible - Continuation sans monitoring.")
                 return
 
         # Tentative de lancement
-        px.launch_app()
-        set_global_handler("arize_phoenix")
-        print("✅ Observabilité Phoenix activée (http://localhost:6006)")
+        try:
+            # On redirige stdout/stderr vers devnull pour phoenix.launch_app() 
+            # car certains logs internes ne respectent pas le logging standard
+            with open(os.devnull, 'w') as f:
+                original_stdout = sys.stdout
+                original_stderr = sys.stderr
+                try:
+                    sys.stdout = f
+                    sys.stderr = f
+                    px.launch_app()
+                finally:
+                    sys.stdout = original_stdout
+                    sys.stderr = original_stderr
+            
+            # On attend un tout petit peu que le serveur démarre
+            import time
+            time.sleep(1)
+        except Exception:
+            logger.info("ℹ️ Phoenix non disponible - Continuation sans monitoring.")
+            return
+
+        # Vérification finale avant instrumentation
+        if is_phoenix_healthy(UI_PORT):
+            try:
+                set_global_handler("arize_phoenix")
+                logger.info("✅ Observabilité Phoenix activée.")
+            except Exception:
+                logger.info("ℹ️ Phoenix non disponible - Continuation sans monitoring.")
+        else:
+            logger.info("ℹ️ Phoenix non disponible - Continuation sans monitoring.")
         
-    except Exception as e:
-        print(f"❌ Observabilité ignorée : {e}")
+    except Exception:
+        # Silence total absolu (Directive Alpha)
+        pass
 
 setup_observability()
 
 
 def main():
-    print("=== Theses-DeepInsight RAG Engine Demo ===")
+    logger.info("=== Theses-DeepInsight RAG Engine Demo ===")
     
     try:
         # Initialisation du moteur
         engine = RAGEngine()
-        print("Moteur RAG initialisé avec succès.\n")
+        logger.info("Moteur RAG prêt.\n")
     except Exception as e:
-        print(f"Erreur d'initialisation : {e}")
+        logger.error(f"Erreur d'initialisation : {e}")
         sys.exit(1)
 
     print("Tapez 'exit' ou 'quit' pour quitter.")
@@ -118,18 +151,22 @@ def main():
         print(str(response))
         print("----------------\n")
         
-        # Affichage des sources si disponibles
+        # Affichage des sources si disponibles (PBI-012)
         source_nodes = getattr(response, 'source_nodes', None)
         if source_nodes:
-            print("Sources utilisées :")
+            print("\n🔍 SOURCES UTILISÉES :")
             for i, node in enumerate(source_nodes):
                 title = node.metadata.get('titre', 'Inconnu')
                 author = node.metadata.get('auteur', 'Inconnu')
+                page = node.metadata.get('page_label') or node.metadata.get('page_number', 'N/A')
                 score = getattr(node, 'score', "N/A")
+                
+                print(f"[{i+1}] \"{node.get_content()[:200].strip()}...\"")
                 if isinstance(score, float):
-                    print(f"[{i+1}] {title} - {author} (Score: {score:.2f})")
+                    print(f"    Source: {title} - {author} (Page: {page}, Score: {score:.2f})")
                 else:
-                    print(f"[{i+1}] {title} - {author} (Score: {score})")
+                    print(f"    Source: {title} - {author} (Page: {page}, Score: {score})")
+                print("-" * 20)
 
 if __name__ == "__main__":
     main()
