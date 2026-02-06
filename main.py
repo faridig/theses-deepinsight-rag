@@ -151,18 +151,22 @@ def main():
         print(str(response))
         print("----------------\n")
         
-        # Affichage des sources si disponibles
+        # Affichage des sources si disponibles (PBI-012)
         source_nodes = getattr(response, 'source_nodes', None)
         if source_nodes:
-            print("Sources utilisées :")
+            print("\n🔍 SOURCES UTILISÉES :")
             for i, node in enumerate(source_nodes):
                 title = node.metadata.get('titre', 'Inconnu')
                 author = node.metadata.get('auteur', 'Inconnu')
+                page = node.metadata.get('page_label') or node.metadata.get('page_number', 'N/A')
                 score = getattr(node, 'score', "N/A")
+                
+                print(f"[{i+1}] \"{node.get_content()[:200].strip()}...\"")
                 if isinstance(score, float):
-                    print(f"[{i+1}] {title} - {author} (Score: {score:.2f})")
+                    print(f"    Source: {title} - {author} (Page: {page}, Score: {score:.2f})")
                 else:
-                    print(f"[{i+1}] {title} - {author} (Score: {score})")
+                    print(f"    Source: {title} - {author} (Page: {page}, Score: {score})")
+                print("-" * 20)
 
 if __name__ == "__main__":
     main()
