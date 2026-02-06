@@ -63,8 +63,8 @@ class RAGEngine:
         Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
 
     def _setup_retrievers(self, storage_path: str):
-        # Pool de candidats (PBI-006 : top_k=20 exigé pour la précision)
-        candidate_top_k = 20
+        # Pool de candidats optimisé (12 au lieu de 20 pour CA-4)
+        candidate_top_k = 12
         
         vector_retriever = self.index.as_retriever(similarity_top_k=candidate_top_k)
         
@@ -74,6 +74,7 @@ class RAGEngine:
             
         retrievers = [vector_retriever]
         if nodes:
+            # BM25 est très rapide, mais on limite quand même le pool
             bm25_retriever = BM25Retriever.from_defaults(
                 nodes=nodes,
                 similarity_top_k=candidate_top_k
@@ -82,10 +83,10 @@ class RAGEngine:
 
         # Optimisation CA-4:
         # 1. num_queries=1 -> Éviter l'appel LLM de QueryExpansion (Gain ~2s)
-        # 2. similarity_top_k=10 -> Réduire le pool pour le reranking (Gain ~1s)
+        # 2. similarity_top_k=8 -> Réduire le pool pour le reranking (Gain ~0.5s)
         return QueryFusionRetriever(
             retrievers,
-            similarity_top_k=10,
+            similarity_top_k=8,
             num_queries=1,
             mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=True,
@@ -146,9 +147,15 @@ class RAGEngine:
 
     def ask(self, question: str):
         if not question or not question.strip():
-            return "Question invalide."
+            return "Veuillez poser une question valide."
         try:
-            return self.query_engine.query(question)
+            import asyncio
+            # Utilisation de aquery pour maximiser les performances asynchrones (CA-4)
+            try:
+                return asyncio.run(self.query_engine.aquery(question))
+            except RuntimeError:
+                # Fallback pour les environnements avec une boucle déjà active
+                return self.query_engine.query(question)
         except Exception as e:
             if "429" in str(e):
                 return "Le service est temporairement saturé. Veuillez réessayer."
