@@ -3,7 +3,6 @@ import logging
 from src.processing.parser import ThesisParser
 from src.indexing.vector_service import VectorService
 from dotenv import load_dotenv
-import chromadb
 from pathlib import Path
 
 # Configuration des logs
