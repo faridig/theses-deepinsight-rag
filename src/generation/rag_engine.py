@@ -113,7 +113,8 @@ class RAGEngine:
 
     def _setup_reranker(self) -> Optional[BaseNodePostprocessor]:
         api_key = os.getenv("COHERE_API_KEY")
-        if not api_key: return None
+        if not api_key:
+            return None
         return CohereRerank(api_key=api_key, model="rerank-multilingual-v3.0", top_n=5)
 
     def _setup_query_engine(self):

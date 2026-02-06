@@ -1,6 +1,5 @@
 import logging
 import pandas as pd
-import warnings
 import os
 from typing import List, Dict
 from llama_index.core.query_engine import BaseQueryEngine
@@ -17,7 +16,6 @@ from ragas.llms import llm_factory
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.integrations.llama_index import evaluate
 from ragas.run_config import RunConfig
-import phoenix as px
 
 # Silence Technique Strict
 for lib in ["opentelemetry", "ragas", "pydantic", "httpx", "urllib3", "openai"]:
