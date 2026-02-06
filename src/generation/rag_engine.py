@@ -63,8 +63,8 @@ class RAGEngine:
         Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
 
     def _setup_retrievers(self, storage_path: str):
-        # Pool de candidats optimisé (12 au lieu de 20 pour CA-4)
-        candidate_top_k = 12
+        # Pool de candidats optimisé (15 au lieu de 12 pour CA-1)
+        candidate_top_k = 15
         
         vector_retriever = self.index.as_retriever(similarity_top_k=candidate_top_k)
         
@@ -74,20 +74,19 @@ class RAGEngine:
             
         retrievers = [vector_retriever]
         if nodes:
-            # BM25 est très rapide, mais on limite quand même le pool
             bm25_retriever = BM25Retriever.from_defaults(
                 nodes=nodes,
                 similarity_top_k=candidate_top_k
             )
             retrievers.append(bm25_retriever)
 
-        # Optimisation CA-4:
-        # 1. num_queries=1 -> Éviter l'appel LLM de QueryExpansion (Gain ~2s)
-        # 2. similarity_top_k=8 -> Réduire le pool pour le reranking (Gain ~0.5s)
+        # Optimisation CA-1 & CA-4:
+        # 1. num_queries=3 -> Meilleure expansion pour capturer les thèses par ID/Titre
+        # 2. similarity_top_k=20 -> Plus de contexte pour le reranking et la synthèse
         return QueryFusionRetriever(
             retrievers,
-            similarity_top_k=8,
-            num_queries=1,
+            similarity_top_k=20,
+            num_queries=3,
             mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=True,
             verbose=False
@@ -119,21 +118,27 @@ class RAGEngine:
 
     def _setup_query_engine(self):
         qa_prompt = PromptTemplate(
-            "Tu es un assistant académique expert. Réponds en utilisant UNIQUEMENT le contexte fourni.\n"
-            "Cite auteur et titre. Sois précis sur les acronymes (ex: L2TI).\n"
-            "Si inconnu, dis : 'Je ne trouve pas d'information dans les thèses.'\n"
+            "Tu es un assistant académique expert spécialisé dans l'analyse de thèses.\n"
+            "Tu dois répondre à la question en utilisant le contexte fourni.\n"
+            "IMPORTANT : Le contexte contient des balises comme [IDENTIFIANT: ...] [TITRE: ...] [AUTEUR: ...].\n"
+            "Si la question porte sur l'objectif d'une thèse et que le titre est explicite, utilise-le pour répondre.\n"
+            "Exemple: Si le titre est 'Étude du transfert thermique', l'objectif est d'étudier le transfert thermique.\n"
+            "Cite toujours l'auteur et le titre exact.\n"
+            "Si vraiment aucune information n'est présente, dis : 'Je ne trouve pas d'information dans les thèses.'\n"
             "---------------------\nCONTEXTE :\n{context_str}\n---------------------\nQUESTION : {query_str}\nRÉPONSE : "
         )
 
-        # Optimisation CA-4: Ordre des post-processeurs
-        # 1. On reranke d'abord pour ne garder que les 5 meilleurs
-        # 2. On ne fait le remplacement de métadonnées (coûteux) que sur ces 5 nodes
+        # Optimisation CA-1 & CA-4:
+        # 1. On remplace d'abord les métadonnées (MetadataReplacement)
+        # 2. Le Reranker voit ainsi le texte enrichi (évite le Reranker Blindness)
         pps: List[BaseNodePostprocessor] = []
+        pps.extend(self.post_processors)
         if self.reranker:
             pps.append(self.reranker)
-        pps.extend(self.post_processors)
             
-        # Optimisation CA-4: ResponseMode.COMPACT est le plus équilibré
+        # Optimisation CA-1: Fusion plus robuste
+        # num_queries=2 permet une expansion légère pour capturer les termes exacts (BM25)
+        # tout en restant sous la barre des 5s (CA-4)
         response_synthesizer = get_response_synthesizer(
             response_mode=ResponseMode.COMPACT,
             text_qa_template=qa_prompt,

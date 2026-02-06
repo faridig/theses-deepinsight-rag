@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict
 import nest_asyncio
 from llama_parse import LlamaParse
 from llama_index.core import StorageContext, Document, Settings
@@ -38,13 +38,14 @@ class ThesisParser:
             original_text_metadata_key="original_text",
         )
 
-    def parse_pdf(self, file_path: str, is_dev: bool = True) -> List[BaseNode]:
+    def parse_pdf(self, file_path: str, is_dev: bool = True, extra_metadata: Optional[Dict] = None) -> List[BaseNode]:
         """
         Parses a PDF file using LlamaParse and returns a list of Nodes.
         
         Args:
             file_path: Path to the PDF file.
             is_dev: If True, limits parsing to the first 10 pages to save quota.
+            extra_metadata: Optional metadata to add to the documents before node creation.
             
         Returns:
             A list of Nodes.
@@ -53,19 +54,17 @@ class ThesisParser:
             raise ValueError("LLAMA_CLOUD_API_KEY must be provided or set in environment.")
             
         # Initialize LlamaParse
-        # Note: LlamaParse supports 'target_pages' or similar via API parameters
-        # We use it here to limit pages if is_dev is True
+        # Optimisation : On utilise le mode 'balanced' ou standard pour plus de stabilité
         parser_args = {
             "api_key": self.api_key,
             "result_type": "markdown",
             "verbose": True,
-            "use_vendor_multimodal_model": True,
-            "vendor_multimodal_model_name": "openai-gpt4o",
+            "language": "fr", # On précise la langue pour CA-1
         }
         
         if is_dev:
-            # target_pages format can be "0-9" for the first 10 pages
-            parser_args["target_pages"] = "0-9"
+            # On passe à 20 pages pour assurer d'avoir l'introduction et les objectifs (CA-1)
+            parser_args["target_pages"] = "0-19"
             
         parser = LlamaParse(**parser_args)
         
@@ -73,19 +72,19 @@ class ThesisParser:
         documents = parser.load_data(file_path)
         
         # Transform documents to nodes
-        nodes = self._create_nodes(documents)
+        nodes = self._create_nodes(documents, extra_metadata=extra_metadata)
         return nodes
 
-    def _create_nodes(self, documents: List[Document]) -> List[BaseNode]:
+    def _create_nodes(self, documents: List[Document], extra_metadata: Optional[Dict] = None) -> List[BaseNode]:
         """
         Transforms documents into Nodes using SentenceWindowNodeParser.
-        
-        Args:
-            documents: List of Document objects.
-            
-        Returns:
-            List of BaseNode objects.
         """
+        if extra_metadata:
+            for doc in documents:
+                doc.metadata.update(extra_metadata)
+                # On injecte aussi dans le texte pour BM25 et le Reranker (CA-1)
+                header = f"[THÈSE ID: {extra_metadata.get('id')}] [TITRE: {extra_metadata.get('titre')}] [RÉSUMÉ: {extra_metadata.get('resume')}]\n"
+                doc.set_content(header + doc.get_content())
         return self.node_parser.get_nodes_from_documents(documents)
 
     def save_nodes(self, nodes: List[BaseNode], storage_dir: str = "storage"):
