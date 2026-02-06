@@ -82,8 +82,9 @@ class ThesisParser:
         if extra_metadata:
             for doc in documents:
                 doc.metadata.update(extra_metadata)
-                # On injecte aussi dans le texte pour BM25 et le Reranker (CA-1)
-                header = f"[THÈSE ID: {extra_metadata.get('id')}] [TITRE: {extra_metadata.get('titre')}] [RÉSUMÉ: {extra_metadata.get('resume')}]\n"
+                # On injecte uniquement l'ID et le Titre dans le texte pour aider le BM25 (CA-1)
+                # Sans polluer avec des résumés pré-rédigés
+                header = f"[THÈSE ID: {extra_metadata.get('id')}] [TITRE: {extra_metadata.get('titre')}]\n"
                 doc.set_content(header + doc.get_content())
         return self.node_parser.get_nodes_from_documents(documents)
 

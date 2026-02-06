@@ -1,63 +1,43 @@
 
 [
     {
-        "question": "Quel est l'objectif principal de la thèse 2023STRAB011 ?",
-        "ground_truth": "L'objectif de cette thèse est d'analyser les mécanismes de transfert thermique dans les nanomatériaux."
+        "question": "Quel pourcentage des tâches des travailleurs aux USA pourrait être complété plus rapidement grâce aux GPT selon la thèse de Pierre Pelletier ?",
+        "ground_truth": "Selon la thèse de Pierre Pelletier (2023STRAB011), environ 15% des tâches des travailleurs aux États-Unis pourraient être effectuées plus rapidement grâce aux LLM (GPT)."
     },
     {
-        "question": "Quelles sont les conclusions de l'auteur de la thèse 2024PA131029 sur l'impact de l'intelligence artificielle en santé ?",
-        "ground_truth": "L'IA permet une amélioration significative du diagnostic précoce mais nécessite une régulation éthique stricte."
+        "question": "Quel est le titre exact de la thèse de Pierre Pelletier ?",
+        "ground_truth": "Le titre exact est 'Artificial intelligence in science : diffusion and impact'."
     },
     {
-        "question": "Expliquez la méthodologie utilisée dans la thèse 2024STRAB004.",
-        "ground_truth": "La méthodologie repose sur une approche qualitative basée sur des entretiens semi-directifs et une analyse de contenu."
+        "question": "Quel article de 2023 est cité par Pierre Pelletier pour discuter de l'impact des LLM sur le marché du travail ?",
+        "ground_truth": "L'article cité est 'GPTs are GPTs: An early look at the labor market impact potential of large language models' par Eloundou et al. (2023)."
     },
     {
-        "question": "Quels sont les futurs travaux suggérés dans l'étude de 2023STRAB011 ?",
-        "ground_truth": "Les travaux futurs devraient se concentrer sur l'application industrielle des résultats obtenus."
+        "question": "Qui sont les directeurs de thèse de Diletta Abbonato ?",
+        "ground_truth": "Les directeurs de thèse sont Patrick Llerena et Stefano Bianchini."
     },
     {
-        "question": "Comment la thèse 2024PA131029 aborde-t-elle la question de la protection des données ?",
-        "ground_truth": "Elle suggère l'utilisation de techniques de chiffrement homomorphe pour garantir la confidentialité."
+        "question": "Quelle est l'école doctorale de Diletta Abbonato ?",
+        "ground_truth": "L'école doctorale est l'école doctorale Augustin Cournot ED 221."
     },
     {
-        "question": "Quelles sont les limitations identifiées dans la thèse 2023STRAB011 concernant les nanomatériaux ?",
-        "ground_truth": "Les limitations incluent l'instabilité thermique à haute température et le coût de production élevé."
+        "question": "Quel est le titre de la thèse de Diletta Abbonato ?",
+        "ground_truth": "Le titre est 'The Role of Artificial Intelligence for Societal Challenges'."
     },
     {
-        "question": "En quoi l'approche de la thèse 2024STRAB004 diffère-t-elle des études précédentes sur le même sujet ?",
-        "ground_truth": "Elle intègre une dimension interdisciplinaire mêlant sociologie et informatique, contrairement aux études purement techniques."
+        "question": "Quel est le titre de la thèse d'Issam Benamara ?",
+        "ground_truth": "Le titre est 'Artificial intelligence for the configuration and optimization of digital advertising campaigns'."
     },
     {
-        "question": "Quel est l'impact social mentionné dans la thèse 2024PA131029 ?",
-        "ground_truth": "L'impact social inclut une meilleure accessibilité aux soins pour les zones rurales grâce à la télémédecine assistée par IA."
+        "question": "En quelle année Issam Benamara a-t-il soutenu sa thèse ?",
+        "ground_truth": "Issam Benamara a soutenu sa thèse en 2024 (le 18 septembre 2024)."
     },
     {
-        "question": "Quels protocoles expérimentaux sont décrits dans la thèse 2024STRAB004 ?",
-        "ground_truth": "Les protocoles incluent des tests A/B en conditions réelles et des analyses de parcours utilisateurs."
+        "question": "Quelle est la discipline de la thèse d'Issam Benamara ?",
+        "ground_truth": "La discipline est l'Informatique."
     },
     {
-        "question": "Quelle est la principale contribution théorique de la thèse 2023STRAB011 ?",
-        "ground_truth": "La formulation d'un nouveau modèle de conductivité thermique pour les structures bidimensionnelles."
-    },
-    {
-        "question": "Quels sont les domaines d'application de la thèse 2024STRAB004 ?",
-        "ground_truth": "Les domaines d'application incluent la conception d'interfaces utilisateur et l'optimisation des systèmes de recommandation."
-    },
-    {
-        "question": "Comment la thèse 2023STRAB011 traite-t-elle la question de l'efficacité énergétique ?",
-        "ground_truth": "Elle propose l'utilisation de matériaux à changement de phase pour améliorer le stockage de l'énergie thermique."
-    },
-    {
-        "question": "Quels sont les principaux obstacles identifiés dans la thèse 2024PA131029 pour l'adoption de l'IA ?",
-        "ground_truth": "Les obstacles majeurs sont le manque de données de qualité et la résistance au changement des praticiens."
-    },
-    {
-        "question": "Résumez les résultats expérimentaux de la thèse 2023STRAB011.",
-        "ground_truth": "Les résultats montrent une augmentation de 15% de l'efficacité de transfert thermique par rapport aux modèles standards."
-    },
-    {
-        "question": "Quelle est l'approche éthique recommandée par l'auteur de la thèse 2024PA131029 ?",
-        "ground_truth": "L'approche recommandée est celle de l'IA centrée sur l'humain, garantissant la transparence et l'auditabilité des algorithmes."
+        "question": "Quels sont les membres du jury mentionnés dans la thèse de Diletta Abbonato ?",
+        "ground_truth": "Les membres du jury incluent Lili Wang, Cinzia Daraio, Björn Jindra, André Lorentz, ainsi que les directeurs Patrick Llerena et Stefano Bianchini."
     }
 ]
