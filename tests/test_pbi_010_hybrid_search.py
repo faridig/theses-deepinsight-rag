@@ -14,11 +14,16 @@ class TestHybridSearch:
         # Setup mocks
         mock_openai.return_value = MockLLM()
         mock_index = MagicMock()
-        # Mock docstore to have some nodes
+        
+        # Mock storage_context and docstore (important for RAGEngine initialization)
+        mock_storage_context = MagicMock()
         mock_node = MagicMock()
-        mock_index.docstore.docs.values.return_value = [mock_node]
-        mock_vector_service.return_value.index = mock_index
-        mock_vector_service.return_value.chroma_collection.count.return_value = 1
+        mock_storage_context.docstore.docs.values.return_value = [mock_node]
+        
+        mock_vs_instance = mock_vector_service.return_value
+        mock_vs_instance.index = mock_index
+        mock_vs_instance.storage_context = mock_storage_context
+        mock_vs_instance.chroma_collection.count.return_value = 1
         
         # Initialize engine
         engine = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")

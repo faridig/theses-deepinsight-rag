@@ -1,33 +1,61 @@
-# Sprint Plan 7 - Puissance de Recherche Hybride & Certification Ragas
+# Sprint Plan 8 - Redressement Technique & Intégrité de l'Indexation
 
-**ID :** PBI-010 & PBI-009  
-**Objectif :** Atteindre une précision chirurgicale sur les termes techniques via la recherche Hybride (Dense + Sparse) et valider la qualité du système par des métriques scientifiques Ragas.
-
-## Tâches à réaliser (Lead-Dev)
-
-### 1. Implémentation de la Recherche Hybride (PBI-010)
-- [ ] Installer la dépendance : `rank_bm25`.
-- [ ] Initialiser le `BM25Retriever` à partir du `docstore` de l'index existant.
-- [ ] Configurer le `QueryFusionRetriever` pour orchestrer :
-    - Le retriever vectoriel actuel (Dense).
-    - Le nouveau `BM25Retriever` (Sparse).
-- [ ] Utiliser le mode `reciprocal_rerank` pour la fusion des résultats.
-- [ ] S'assurer que le `CohereRerank` intervient toujours en post-traitement sur les résultats fusionnés.
-
-### 2. Mise en place du Framework d'Évaluation (PBI-009)
-- [ ] Installer `ragas`.
-- [ ] Créer un module `src/evaluation/evaluator.py` utilisant l'intégration native LlamaIndex.
-- [ ] Configurer les 4 métriques clés : `Faithfulness`, `AnswerRelevancy`, `ContextPrecision`, `ContextRecall`.
-- [ ] Développer un script de test sur un "Golden Dataset" de 10-15 questions complexes pour obtenir un score global de performance.
-
-### 3. Intégration Phoenix
-- [ ] Configurer l'export des scores Ragas vers Arize Phoenix pour visualiser la qualité des réponses directement dans les traces.
-
-## Critères d'Acceptation (CA)
-- **CA-1** : Le système remonte correctement des documents contenant des termes techniques exacts ou acronymes, même si la sémantique est floue (Grâce au BM25).
-- **CA-2** : Un rapport Ragas est généré automatiquement, montrant des scores de Fidélité et de Pertinence.
-- **CA-3** : Les traces Phoenix montrent la fusion des deux retrievers (Vector + BM25).
-- **CA-4** : Aucun ralentissement majeur n'est constaté (< 5s pour une réponse complète hybride + rerank).
+**Sprint Goal** : Garantir une indexation exhaustive et transparente de l'intégralité des PDF (notamment les conclusions) et prouver l'origine textuelle des réponses pour restaurer la confiance client.
+**Statut** : PLANNING
 
 ---
-**STATUT : SPRINT DE QUALITÉ - PRÊT POUR EXÉCUTION**
+
+### [PBI-011] Indexation Exhaustive & Intègre
+**Priorité** : Critique | **Estimation** : L
+
+**User Story** : "En tant que Product Owner, je veux que le système parse l'intégralité des thèses (corps du texte et conclusions) sans limitation de page, afin de garantir l'honnêteté scientifique des réponses."
+**Dépendances** : Aucune (Refonte structurelle)
+**Critères d'Acceptation (Gherkin)** :
+- [ ] **Scenario 0** : Assainissement Total (Data & Index)
+  - **GIVEN** Un dossier `data/` pollué par des fichiers `.json` de test et une base vectorielle corrompue.
+  - **WHEN** Le sprint de redressement démarre.
+  - **THEN** :
+      1. Suppression de tous les fichiers `.json` suspects dans `data/` (ex: `test_dataset.json`, `golden_dataset.json` corrompus).
+      2. Suppression/Réinitialisation de la collection ChromaDB.
+      3. Seuls les fichiers PDFs originaux doivent être conservés comme source de vérité.
+- [ ] **Scenario 1** : Parsing intégral
+  - **GIVEN** Un document PDF de plus de 100 pages
+  - **WHEN** Le processus d'ingestion est lancé
+  - **THEN** Le nombre de fragments (Nodes) créés correspond à la totalité du texte, conclusions incluses.
+- [ ] **Scenario 2** : Suppression des "Shadow Metadata"
+  - **GIVEN** Le pipeline de parsing
+  - **WHEN** Les métadonnées sont générées
+  - **THEN** Aucune donnée factuelle (ex: résumé, conclusion) ne doit être injectée manuellement si elle n'est pas extraite dynamiquement du texte source.
+
+---
+
+### [PBI-012] Preuve d'Extraction (Transparence)
+**Priorité** : Haute | **Estimation** : M
+
+**User Story** : "En tant que Client, je veux voir la source exacte (citation et numéro de page) utilisée pour chaque réponse, afin de m'assurer qu'il ne s'agit pas d'hallucinations basées sur des métadonnées."
+**Dépendances** : [PBI-011]
+**Critères d'Acceptation (Gherkin)** :
+- [ ] **Scenario 1** : Citation de source
+  - **GIVEN** Une réponse générée par le RAG
+  - **WHEN** L'utilisateur consulte la réponse
+  - **THEN** Le système affiche un bloc "Sources" avec le texte exact extrait et la référence à la page du PDF original.
+
+---
+
+### [PBI-010] Recherche Hybride (Reprise)
+**Priorité** : Haute | **Estimation** : S
+
+**User Story** : "En tant qu'utilisateur, je veux que la recherche hybride (BM25 + Vectoriel) s'applique sur l'intégralité du corpus indexé, afin de retrouver des termes techniques même en fin de document."
+**Dépendances** : [PBI-011]
+**Critères d'Acceptation (Gherkin)** :
+- [ ] **Scenario 1** : Recherche sur l'index global
+  - **GIVEN** Un terme technique présent uniquement dans la conclusion d'une thèse
+  - **WHEN** Je lance une recherche hybride
+  - **THEN** Le document est correctement remonté et classé par le Reranker.
+
+---
+
+**CONSIGNES POUR LE LEAD-DEV** :
+1. Interdiction d'utiliser des limites de pages arbitraires.
+2. Utiliser LlamaParse en mode `full_parse` ou implémenter un `RecursiveRetriever` si nécessaire pour gérer les longs documents.
+3. La transparence est la priorité : toute métadonnée injectée doit être traçable vers une portion du document original.

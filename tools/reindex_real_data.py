@@ -3,7 +3,6 @@ import logging
 from src.processing.parser import ThesisParser
 from src.indexing.vector_service import VectorService
 from dotenv import load_dotenv
-import chromadb
 from pathlib import Path
 
 # Configuration des logs
@@ -22,12 +21,9 @@ def reindex_real_data():
     # 1. Nettoyage radical
     logger.info("Nettoyage de l'index existant...")
     if os.path.exists(storage_path):
-        client = chromadb.PersistentClient(path=storage_path)
-        try:
-            client.delete_collection(collection_name)
-            logger.info(f"Collection {collection_name} supprimée.")
-        except Exception as e:
-            logger.warning(f"Erreur lors de la suppression de la collection (peut-être inexistante) : {e}")
+        import shutil
+        shutil.rmtree(storage_path)
+        logger.info(f"Répertoire {storage_path} supprimé.")
 
     # 2. Initialisation des services
     parser = ThesisParser()
@@ -52,7 +48,7 @@ def reindex_real_data():
         thesis_id = pdf_path.stem
         logger.info(f"Traitement de {thesis_id}...")
         
-        # Récupération dynamique des métadonnées
+        # Utilisation de l'API pour les métadonnées brutes (CA-1)
         metadata = {"titre": "Thèse Inconnue", "auteur": "Inconnu", "date": "N/A", "discipline": "N/A"}
         try:
             search_results = theses_client.search(thesis_id)
@@ -62,25 +58,24 @@ def reindex_real_data():
                 metadata["auteur"] = ", ".join(res.get("auteurs", [metadata["auteur"]]))
                 metadata["date"] = res.get("dateSoutenance", metadata["date"])
                 metadata["discipline"] = res.get("discipline", metadata["discipline"])
-                logger.info(f"Métadonnées récupérées pour {thesis_id} : {metadata['auteur']} - {metadata['titre']}")
+                logger.info(f"Métadonnées API récupérées pour {thesis_id}")
             else:
                 logger.warning(f"Aucune métadonnée trouvée pour {thesis_id}")
         except Exception as e:
-            logger.error(f"Erreur lors de la récupération des métadonnées pour {thesis_id} : {e}")
+            logger.error(f"Erreur API pour {thesis_id} : {e}")
 
         logger.info(f"Parsing réel de {pdf_path.name}...")
         try:
-            # On parse les 10 premières pages (is_dev=True) pour le hotfix
-            nodes = parser.parse_pdf(str(pdf_path), is_dev=True)
-            
-            for node in nodes:
-                node.metadata.update({
-                    "id": thesis_id,
-                    "titre": metadata["titre"],
-                    "auteur": metadata["auteur"],
-                    "date": metadata["date"],
-                    "discipline": metadata["discipline"]
-                })
+            # On n'injecte plus de résumé factice (Incident PR #12)
+            extra_meta = {
+                "id": thesis_id,
+                "titre": metadata["titre"],
+                "auteur": metadata["auteur"],
+                "date": metadata["date"],
+                "discipline": metadata["discipline"]
+            }
+            # PBI-011: Utilisation du mode full_parse (is_dev=False) pour une indexation exhaustive
+            nodes = parser.parse_pdf(str(pdf_path), is_dev=False, extra_metadata=extra_meta)
             
             all_nodes.extend(nodes)
             logger.info(f"OK : {len(nodes)} nœuds extraits pour {thesis_id}")
