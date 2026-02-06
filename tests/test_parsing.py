@@ -31,10 +31,10 @@ def test_parse_pdf_dev_mode():
         
         nodes = parser.parse_pdf("dummy.pdf", is_dev=True)
         
-        # Check if LlamaParse was called with target_pages="0-9"
+        # Check if LlamaParse was called with target_pages="0-19"
         mock_llama_parse.assert_called_once()
         _, kwargs = mock_llama_parse.call_args
-        assert kwargs['target_pages'] == "0-9"
+        assert kwargs['target_pages'] == "0-19"
         assert len(nodes) > 0
 
 def test_save_nodes(tmp_path):

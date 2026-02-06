@@ -1,0 +1,43 @@
+
+[
+    {
+        "question": "Quel pourcentage des tâches des travailleurs aux USA pourrait être complété plus rapidement grâce aux GPT selon la thèse de Pierre Pelletier ?",
+        "ground_truth": "Selon la thèse de Pierre Pelletier (2023STRAB011), environ 15% des tâches des travailleurs aux États-Unis pourraient être effectuées plus rapidement grâce aux LLM (GPT)."
+    },
+    {
+        "question": "Quel est le titre exact de la thèse de Pierre Pelletier ?",
+        "ground_truth": "Le titre exact est 'Artificial intelligence in science : diffusion and impact'."
+    },
+    {
+        "question": "Quel article de 2023 est cité par Pierre Pelletier pour discuter de l'impact des LLM sur le marché du travail ?",
+        "ground_truth": "L'article cité est 'GPTs are GPTs: An early look at the labor market impact potential of large language models' par Eloundou et al. (2023)."
+    },
+    {
+        "question": "Qui sont les directeurs de thèse de Diletta Abbonato ?",
+        "ground_truth": "Les directeurs de thèse sont Patrick Llerena et Stefano Bianchini."
+    },
+    {
+        "question": "Quelle est l'école doctorale de Diletta Abbonato ?",
+        "ground_truth": "L'école doctorale est l'école doctorale Augustin Cournot ED 221."
+    },
+    {
+        "question": "Quel est le titre de la thèse de Diletta Abbonato ?",
+        "ground_truth": "Le titre est 'The Role of Artificial Intelligence for Societal Challenges'."
+    },
+    {
+        "question": "Quel est le titre de la thèse d'Issam Benamara ?",
+        "ground_truth": "Le titre est 'Artificial intelligence for the configuration and optimization of digital advertising campaigns'."
+    },
+    {
+        "question": "En quelle année Issam Benamara a-t-il soutenu sa thèse ?",
+        "ground_truth": "Issam Benamara a soutenu sa thèse en 2024 (le 18 septembre 2024)."
+    },
+    {
+        "question": "Quelle est la discipline de la thèse d'Issam Benamara ?",
+        "ground_truth": "La discipline est l'Informatique."
+    },
+    {
+        "question": "Quels sont les membres du jury mentionnés dans la thèse de Diletta Abbonato ?",
+        "ground_truth": "Les membres du jury incluent Lili Wang, Cinzia Daraio, Björn Jindra, André Lorentz, ainsi que les directeurs Patrick Llerena et Stefano Bianchini."
+    }
+]
