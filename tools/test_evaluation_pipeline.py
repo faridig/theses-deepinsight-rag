@@ -1,6 +1,4 @@
 
-import os
-import json
 import asyncio
 from dotenv import load_dotenv
 from src.generation.rag_engine import RAGEngine
