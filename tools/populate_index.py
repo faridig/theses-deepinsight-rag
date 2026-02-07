@@ -53,8 +53,8 @@ def populate_index(
     if reset_index:
         vector_service.reset_collection()
     
-    total_estimated_pages = 0
-    all_nodes = []
+    total_estimated_pages = 0 # Ajout de l'initialisation
+    all_documents = [] # Changé de all_nodes à all_documents
     # Contrôle de la volumétrie pour les runs de développement/test
     files_to_process = downloaded_files if is_production_run else downloaded_files[:1]
     for file_path, metadata in files_to_process:
@@ -70,28 +70,20 @@ def populate_index(
         logger.info(f"Parsing de {file_path}...")
         try:
             # On utilise le mode dev pour limiter le parsing si on n'est pas en run de production
-            nodes = parser.parse_pdf(str(file_path), is_dev=not is_production_run)
+            documents = parser.parse_pdf(str(file_path), is_dev=not is_production_run, extra_metadata=metadata)
             
-            # Injection des métadonnées métier dans chaque nœud
-            for node in nodes:
-                node.metadata.update({
-                    "id": metadata.get("id"),
-                    "titre": metadata.get("titre"),
-                    "auteur": ", ".join(metadata.get("auteurs", [])),
-                    "date": metadata.get("dateSoutenance"),
-                    "discipline": metadata.get("discipline")
-                })
-            
-            all_nodes.extend(nodes)
+            # Plus besoin d'injecter les métadonnées ici, c'est fait dans le parser
+            all_documents.extend(documents) # Changé de all_nodes.extend(nodes) à all_documents.extend(documents)
         except Exception as e:
             logger.error(f"Erreur lors du parsing de {file_path}: {e}")
 
-    if all_nodes:
-        logger.info(f"Indexation de {len(all_nodes)} nœuds dans ChromaDB...")
-        vector_service.index_nodes(all_nodes)
+    if all_documents:
+        logger.info(f"Indexation de {len(all_documents)} documents bruts...")
+        # La fonction index_documents sera implémentée dans VectorService
+        vector_service.index_documents(all_documents)
         logger.info("Indexation terminée avec succès.")
     else:
-        logger.warning("Aucun nœud à indexer.")
+        logger.warning("Aucun document à indexer.")
         
     # PBI-011 Scenario 1.2: Documentation de l'estimation des coûts
     if total_estimated_pages > 0:

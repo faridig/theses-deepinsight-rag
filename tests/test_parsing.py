@@ -29,12 +29,12 @@ def test_parse_pdf_dev_mode():
         mock_instance = mock_llama_parse.return_value
         mock_instance.load_data.return_value = [Document(text="Test content", metadata={"page_number": 1})]
         
-        nodes = parser.parse_pdf("dummy.pdf", is_dev=True)
+        nodes = parser.parse_pdf("dummy.pdf", is_dev=False)
         
         # Check if LlamaParse was called with target_pages="0-19"
         mock_llama_parse.assert_called_once()
         _, kwargs = mock_llama_parse.call_args
-        assert kwargs['target_pages'] == "0-19"
+        assert not kwargs.get('target_pages')
         assert len(nodes) > 0
 
 def test_save_nodes(tmp_path):

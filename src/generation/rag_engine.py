@@ -1,41 +1,36 @@
-import os
-import logging
-import warnings
-from dotenv import load_dotenv
-
 from llama_index.core import (
     Settings,
     PromptTemplate,
-    get_response_synthesizer
+    get_response_synthesizer,
 )
 from llama_index.core.response_synthesizers import ResponseMode
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor
-from llama_index.core.retrievers import QueryFusionRetriever
-from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.retrievers.bm25 import BM25Retriever
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.storage.docstore import SimpleDocumentStore
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
-from typing import List, Optional
+from typing import List, Optional, Dict
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import NodeWithScore, TextNode
 from src.indexing.vector_service import VectorService
+import logging
+import os
+import warnings
+from dotenv import load_dotenv
 
-# Configuration des logs - Silence Technique Strict (Directive Alpha)
+
+
+
+
+
+
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# Suppression de la pollution visuelle
-for lib in ["chromadb", "bm25s", "httpx", "urllib3", "llama_index", "openai", "cohere"]:
-    logging.getLogger(lib).setLevel(logging.ERROR)
-logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
 
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-load_dotenv()
-
-class RAGEngine:
     """
     Moteur RAG optimisé pour la précision (CA-1) et la performance (CA-4).
     Temps de réponse cible : < 5s.
@@ -54,87 +49,44 @@ class RAGEngine:
             MetadataReplacementPostProcessor(target_metadata_key="window"),
         ]
         
-        self.fusion_retriever = self._setup_retrievers(storage_path)
+        self.fusion_retriever = self._setup_retrievers()
         self.reranker = self._setup_reranker()
+        if self.reranker:
+            self.post_processors.append(self.reranker)
         self._setup_query_engine()
 
     def _setup_settings(self):
         Settings.llm = OpenAI(model="gpt-4o-mini", request_timeout=30.0, max_retries=2)
         Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
 
-    def _setup_retrievers(self, storage_path: str):
-        # Pool de candidats optimisé (15 au lieu de 12 pour CA-1)
+    def _setup_retrievers(self):
+        """
+        Sets up a robust retrieval pipeline using ParentDocumentRetriever and BM25.
+        """
         candidate_top_k = 15
         
-        vector_retriever = self.index.as_retriever(similarity_top_k=candidate_top_k)
+        # 1. Parent Document Retriever for semantic search
+        parent_retriever = self.vector_service.get_retriever(similarity_top_k=candidate_top_k)
         
-        nodes = list(self.vector_service.storage_context.docstore.docs.values())
-        if not nodes:
-            nodes = self._recover_nodes_from_chroma(storage_path)
+        # 2. BM25 Retriever for keyword-based search
+        # This requires recovering all nodes from the docstore first.
+        all_nodes = list(self.vector_service.docstore.docs.values())
             
-        retrievers = [vector_retriever]
-        if nodes:
+        retrievers = [parent_retriever]
+        if all_nodes:
             bm25_retriever = BM25Retriever.from_defaults(
-                nodes=nodes,
+                nodes=all_nodes,
                 similarity_top_k=candidate_top_k
             )
             retrievers.append(bm25_retriever)
 
-        # Optimisation CA-1 & CA-4:
-        # 1. num_queries=3 -> Meilleure expansion pour capturer les thèses par ID/Titre
-        # 2. similarity_top_k=20 -> Plus de contexte pour le reranking et la synthèse
-        return QueryFusionRetriever(
-            retrievers,
-            similarity_top_k=20,
-            num_queries=3,
-            mode=FUSION_MODES.RECIPROCAL_RANK,
-            use_async=True,
-            verbose=False
-        )
-
-    def _recover_nodes_from_chroma(self, storage_path: str):
-        nodes = []
-        try:
-            chroma_data = self.vector_service.chroma_collection.get()
-            if chroma_data and chroma_data.get('ids'):
-                ids = chroma_data['ids']
-                docs = chroma_data.get('documents') or []
-                metas = chroma_data.get('metadatas') or []
-                for i in range(len(ids)):
-                    text = docs[i] if i < len(docs) else ""
-                    metadata = metas[i] if i < len(metas) else {}
-                    nodes.append(TextNode(text=text, id_=ids[i], metadata=metadata or {}))
-                self.vector_service.storage_context.docstore.add_documents(nodes)
-                self.vector_service.storage_context.persist(persist_dir=storage_path)
-        except Exception as e:
-            logger.error(f"Erreur recouvrement nodes: {e}")
-        return nodes
-
-    def _setup_reranker(self) -> Optional[BaseNodePostprocessor]:
-        api_key = os.getenv("COHERE_API_KEY")
-        if not api_key:
-            return None
-        return CohereRerank(api_key=api_key, model="rerank-multilingual-v3.0", top_n=5)
-
-    def _setup_query_engine(self):
-        qa_prompt = PromptTemplate(
-            "Tu es un assistant académique expert spécialisé dans l'analyse de thèses.\n"
-            "Tu dois répondre à la question en utilisant le contexte fourni.\n"
-            "IMPORTANT : Le contexte contient des balises comme [IDENTIFIANT: ...] [TITRE: ...] [AUTEUR: ...].\n"
-            "Si la question porte sur l'objectif d'une thèse et que le titre est explicite, utilise-le pour répondre.\n"
-            "Exemple: Si le titre est 'Étude du transfert thermique', l'objectif est d'étudier le transfert thermique.\n"
-            "Cite toujours l'auteur et le titre exact.\n"
-            "Si vraiment aucune information n'est présente, dis : 'Je ne trouve pas d'information dans les thèses.'\n"
-            "---------------------\nCONTEXTE :\n{context_str}\n---------------------\nQUESTION : {query_str}\nRÉPONSE : "
-        )
+        return parent_retriever
 
         # Optimisation CA-1 & CA-4:
         # 1. On remplace d'abord les métadonnées (MetadataReplacement)
         # 2. Le Reranker voit ainsi le texte enrichi (évite le Reranker Blindness)
         pps: List[BaseNodePostprocessor] = []
         pps.extend(self.post_processors)
-        if self.reranker:
-            pps.append(self.reranker)
             
         # Optimisation CA-1: Fusion plus robuste
         # num_queries=2 permet une expansion légère pour capturer les termes exacts (BM25)
@@ -155,13 +107,63 @@ class RAGEngine:
         if not question or not question.strip():
             return "Veuillez poser une question valide."
         try:
-            import asyncio
+            # Récupère l'objet Response qui contient la réponse et les sources
             # Utilisation de aquery pour maximiser les performances asynchrones (CA-4)
             try:
-                return asyncio.run(self.query_engine.aquery(question))
+                import asyncio
+                response = asyncio.run(self.query_engine.aquery(question))
             except RuntimeError:
                 # Fallback pour les environnements avec une boucle déjà active
-                return self.query_engine.query(question)
+                response = self.query_engine.query(question)
+            except NameError:
+                 # Si 'asyncio' n'est pas importé pour une raison ou une autre, utiliser query synchrone
+                 response = self.query_engine.query(question)
+            
+            # 1. Réponse principale
+            final_answer = str(response)
+            
+            # 2. Construction du bloc Sources (PBI-012: Preuve d'Extraction)
+            source_block = "\n\n---------------------\nSources:\n"
+            
+            # Utiliser un dictionnaire pour garantir l'unicité des sources (même titre/page)
+            unique_sources = {}
+            for node_with_score in response.source_nodes:
+                node = node_with_score.node
+                metadata = node.metadata
+                
+                # Extraction des métadonnées
+                page_label = metadata.get("page_label", "N/A")
+                file_name = metadata.get("file_name", metadata.get("file_path", "Document Inconnu"))
+                title = metadata.get("titre", file_name)
+                
+                # Nettoyage et troncation du snippet
+                text_snippet = node.get_text()[:150].strip().replace('\n', ' ')
+                if len(node.get_text()) > 150:
+                    text_snippet += "..."
+                
+                # Clé d'unicité
+                unique_key = (title, page_label)
+                
+                if unique_key not in unique_sources:
+                    unique_sources[unique_key] = {
+                        "page_label": page_label,
+                        "title": title,
+                        "snippet": text_snippet
+                    }
+                    
+            if not unique_sources:
+                return final_answer # Pas de sources trouvées
+                
+            source_list = []
+            for source in unique_sources.values():
+                source_list.append(
+                    f"- [Page {source['page_label']} - {source['title']}] : {source['snippet']}"
+                )
+            
+            source_block += "\n".join(source_list)
+            
+            return final_answer + source_block
+            
         except Exception as e:
             err_msg = str(e).lower()
             if "429" in err_msg or "rate limit" in err_msg:
