@@ -86,3 +86,35 @@ class VectorService:
         """
         retriever = self.get_retriever(similarity_top_k=similarity_top_k)
         return retriever.retrieve(query_text)
+
+    def reset_collection(self):
+        """
+        Deletes and recreates the ChromaDB collection and clears LlamaIndex storage
+        to ensure a clean state (PBI-011 Scenario 0.2).
+        """
+        print(f"ATTENTION: Deleting collection '{self.collection_name}' and storage files in {self.storage_path}...")
+        
+        # 1. Delete LlamaIndex persistence files
+        llama_index_files = ["docstore.json", "index_store.json", "graph_store.json", "image_store.json"]
+        for filename in llama_index_files:
+            file_path = os.path.join(self.storage_path, filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"Deleted {filename}")
+        
+        # 2. Delete ChromaDB collection
+        try:
+            self.db.delete_collection(name=self.collection_name)
+        except Exception:
+            # We ignore this error, the collection might not exist
+            pass
+        
+        # 3. Recreate the collection and re-initialize context
+        self.chroma_collection = self.db.get_or_create_collection(self.collection_name)
+        self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
+        
+        # Reset storage context and index
+        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+        self._index = None
+        
+        print(f"Collection '{self.collection_name}' and storage fully reset.")
