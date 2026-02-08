@@ -14,8 +14,10 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-005** | **Évaluation & Observabilité** | Implémentation d'Arize Phoenix pour le monitoring et la traçabilité. | DONE | CRITIQUE |
 | **PBI-006** | **Multi-Query Retrieval** | Génération de 3 variations de requête pour élargir la recherche sémantique. | DONE | HAUTE |
 | **PBI-008** | **Reranking & High Top-K** | Passage à top_k=20 et intégration d'un Reranker (Cohere) pour affiner la pertinence. | DONE | HAUTE |
-| **PBI-010** | **Recherche Hybride (BM25)** | Combinaison de la recherche sémantique et lexicale pour les termes techniques. | IN_PROGRESS | HAUTE |
-| **PBI-009** | **Évaluation Ragas** | Mesure scientifique de la fidélité, pertinence et précision du contexte (0-1). | IN_PROGRESS | HAUTE |
+| **PBI-010** | **Recherche Hybride (BM25)** | Combinaison de la recherche sémantique et lexicale pour les termes techniques. | À REPRENDRE | HAUTE |
+| **PBI-009** | **Évaluation Ragas** | Mesure scientifique de la fidélité, pertinence et précision du contexte (0-1). | À REPRENDRE | HAUTE |
+| **PBI-011** | **Assainissement & Indexation Exhaustive** | Nettoyage des données corrompues (.json, index) et refonte du parsing intégral. | EN ATTENTE | CRITIQUE |
+| **PBI-012** | **Preuve d'Extraction (Transparence)** | Mécanisme de démonstration prouvant que les réponses proviennent bien du corps du texte (Citations précises). | EN ATTENTE | HAUTE |
 | **PBI-007** | **LlamaParse Multimodal Premium** | Extraction avancée des graphiques et tableaux via GPT-4o. | EN ATTENTE | HAUTE |
 
 ---

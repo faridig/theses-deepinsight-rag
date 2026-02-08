@@ -2,7 +2,11 @@ import logging
 from src.ingestion.theses_client import ThesesClient
 from src.processing.parser import ThesisParser
 from src.indexing.vector_service import VectorService
+import pypdf
 from dotenv import load_dotenv
+import typer
+
+app = typer.Typer()
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
@@ -10,11 +14,17 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-def populate_index(query: str = "intelligence artificielle", limit: int = 2):
+@app.command()
+def populate_index(
+    query: str = typer.Option("intelligence artificielle", help="La requête de recherche pour les thèses."), 
+    limit: int = typer.Option(2, help="Le nombre de thèses à télécharger. Utiliser un grand nombre pour l'ingestion complète."), 
+    reset_index: bool = typer.Option(False, "--reset", "-r", help="Supprime et recrée la collection ChromaDB avant l'indexation."), 
+    is_production_run: bool = typer.Option(False, "--prod", "-p", help="Lève toutes les limites de parsing et de fichiers (mode production).")
+):
     """
     Télécharge des thèses, les parse et les indexe dans ChromaDB.
     """
-    logger.info(f"Début de la population de l'index pour la requête : {query}")
+    logger.info(f"Début de la population de l'index pour la requête : {query}. Production run: {is_production_run}, Reset index: {reset_index}")
     
     # 1. Ingestion
     client = ThesesClient(data_dir="data")
@@ -40,34 +50,51 @@ def populate_index(query: str = "intelligence artificielle", limit: int = 2):
     parser = ThesisParser()
     vector_service = VectorService(storage_path="./storage/chroma", collection_name="theses_collection")
     
-    all_nodes = []
-    # On ne prend qu'un seul fichier pour être sûr que ça passe le timeout
-    for file_path, metadata in downloaded_files[:1]:
+    if reset_index:
+        vector_service.reset()
+    
+    total_estimated_pages = 0 # Ajout de l'initialisation
+    all_documents = [] # Changé de all_nodes à all_documents
+    # Contrôle de la volumétrie pour les runs de développement/test
+    files_to_process = downloaded_files if is_production_run else downloaded_files[:1]
+    for file_path, metadata in files_to_process:
+        # 1. Compter les pages pour l'estimation de coût (Scenario 1.2)
+        try:
+            reader = pypdf.PdfReader(file_path)
+            page_count = len(reader.pages)
+            total_estimated_pages += page_count
+            logger.info(f"PDF {file_path} a {page_count} pages.")
+        except Exception as e:
+            logger.error(f"Erreur lors de la lecture du nombre de pages de {file_path}: {e}")
+            
         logger.info(f"Parsing de {file_path}...")
         try:
-            # On limite à 10 pages en dev pour économiser le quota LlamaParse
-            nodes = parser.parse_pdf(str(file_path), is_dev=True)
+            # On ne limite plus le parsing par page, mais on peut toujours limiter le nombre de fichiers
+            documents = parser.parse_pdf(str(file_path), extra_metadata=metadata)
             
-            # Injection des métadonnées métier dans chaque nœud
-            for node in nodes:
-                node.metadata.update({
-                    "id": metadata.get("id"),
-                    "titre": metadata.get("titre"),
-                    "auteur": ", ".join(metadata.get("auteurs", [])),
-                    "date": metadata.get("dateSoutenance"),
-                    "discipline": metadata.get("discipline")
-                })
-            
-            all_nodes.extend(nodes)
+            # Plus besoin d'injecter les métadonnées ici, c'est fait dans le parser
+            all_documents.extend(documents) # Changé de all_nodes.extend(nodes) à all_documents.extend(documents)
         except Exception as e:
             logger.error(f"Erreur lors du parsing de {file_path}: {e}")
 
-    if all_nodes:
-        logger.info(f"Indexation de {len(all_nodes)} nœuds dans ChromaDB...")
-        vector_service.index_nodes(all_nodes)
+    if all_documents:
+        logger.info(f"Indexation de {len(all_documents)} documents bruts...")
+        # La fonction index_documents sera implémentée dans VectorService
+        vector_service.index_documents(all_documents)
         logger.info("Indexation terminée avec succès.")
     else:
-        logger.warning("Aucun nœud à indexer.")
+        logger.warning("Aucun document à indexer.")
+        
+    # PBI-011 Scenario 1.2: Documentation de l'estimation des coûts
+    if total_estimated_pages > 0:
+        COST_PER_PAGE = 0.0005  # $0.0005 par page LlamaParse (Estimation basée sur la doc)
+        estimated_cost = total_estimated_pages * COST_PER_PAGE
+        logger.info("-" * 50)
+        logger.info(f"ESTIMATION DES COÛTS LLAMAPARSE (PBI-011 Scenario 1.2)")
+        logger.info(f"Nombre total de pages à parser pour ce lot: {total_estimated_pages}")
+        logger.info(f"Coût par page (estimation): ${COST_PER_PAGE}")
+        logger.info(f"Coût total estimé pour ce lot: ${estimated_cost:.4f}")
+        logger.info("-" * 50)
 
 if __name__ == "__main__":
-    populate_index()
+    app()

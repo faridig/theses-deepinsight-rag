@@ -1,108 +1,68 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict
 import nest_asyncio
 from llama_parse import LlamaParse
-from llama_index.core import StorageContext, Document, Settings
-from llama_index.llms.openai import OpenAI
-from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.core.node_parser import SentenceWindowNodeParser
-from llama_index.core.schema import BaseNode
+from llama_index.core import Document
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
-# Configure Global Settings for OpenAI
-Settings.llm = OpenAI(model="gpt-4o")
-Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
 
 # Apply nest_asyncio for async operations in environments that need it
 nest_asyncio.apply()
 
 class ThesisParser:
     """
-    Parser class for converting thesis PDF documents into structured Nodes.
-    Uses LlamaParse for high-fidelity PDF parsing and SentenceWindowNodeParser for chunking.
+    Parser class for converting thesis PDF documents into LlamaIndex Document objects.
+    Uses LlamaParse for high-fidelity PDF parsing.
+    The node creation logic is now delegated to the VectorService.
     """
     
-    def __init__(self, api_key: Optional[str] = None, window_size: int = 3):
+    def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("LLAMA_CLOUD_API_KEY")
         if not self.api_key:
             # We don't raise error here to allow initialization in tests without API key
             # but we'll check it before calling LlamaParse
             pass
-            
-        self.node_parser = SentenceWindowNodeParser.from_defaults(
-            window_size=window_size,
-            window_metadata_key="window",
-            original_text_metadata_key="original_text",
-        )
 
-    def parse_pdf(self, file_path: str, is_dev: bool = True) -> List[BaseNode]:
+    def parse_pdf(self, file_path: str, extra_metadata: Optional[Dict] = None) -> List[Document]:
         """
-        Parses a PDF file using LlamaParse and returns a list of Nodes.
+        Parses a PDF file using LlamaParse and returns a list of Document objects.
         
         Args:
             file_path: Path to the PDF file.
-            is_dev: If True, limits parsing to the first 10 pages to save quota.
+            extra_metadata: Optional metadata to add to the documents.
             
         Returns:
-            A list of Nodes.
+            A list of Document objects.
         """
         if not self.api_key:
             raise ValueError("LLAMA_CLOUD_API_KEY must be provided or set in environment.")
             
-        # Initialize LlamaParse
-        # Note: LlamaParse supports 'target_pages' or similar via API parameters
-        # We use it here to limit pages if is_dev is True
         parser_args = {
             "api_key": self.api_key,
             "result_type": "markdown",
             "verbose": True,
-            "use_vendor_multimodal_model": True,
-            "vendor_multimodal_model_name": "openai-gpt4o",
+            "language": "fr",
+            "premium_mode": True, # Active le mode full_parse pour l'exhaustivité (PBI-011)
         }
         
-        if is_dev:
-            # target_pages format can be "0-9" for the first 10 pages
-            parser_args["target_pages"] = "0-9"
-            
         parser = LlamaParse(**parser_args)
         
-        # Load data from file
+        # Load data returns a list of Document objects
         documents = parser.load_data(file_path)
         
-        # Transform documents to nodes
-        nodes = self._create_nodes(documents)
-        return nodes
-
-    def _create_nodes(self, documents: List[Document]) -> List[BaseNode]:
-        """
-        Transforms documents into Nodes using SentenceWindowNodeParser.
-        
-        Args:
-            documents: List of Document objects.
+        # Ensure metadata is correctly set for each document
+        # PBI-012: Capture essential metadata for transparency
+        file_name = os.path.basename(file_path)
+        for doc in documents:
+            # LlamaParse often puts page info in metadata, but we ensure it's there
+            doc.metadata["file_name"] = file_name
+            if "page_number" not in doc.metadata and "page" in doc.metadata:
+                doc.metadata["page_number"] = doc.metadata["page"]
             
-        Returns:
-            List of BaseNode objects.
-        """
-        return self.node_parser.get_nodes_from_documents(documents)
+            if extra_metadata:
+                doc.metadata.update(extra_metadata)
+                
+        return documents
 
-    def save_nodes(self, nodes: List[BaseNode], storage_dir: str = "storage"):
-        """
-        Saves nodes to the storage directory using StorageContext.
-        
-        Args:
-            nodes: List of nodes to save.
-            storage_dir: Directory where to save the nodes.
-        """
-        if not os.path.exists(storage_dir):
-            os.makedirs(storage_dir)
-        
-        # Create a storage context and add nodes
-        storage_context = StorageContext.from_defaults()
-        storage_context.docstore.add_documents(nodes)
-        
-        # Persist the storage context
-        storage_context.persist(persist_dir=storage_dir)
-        print(f"Nodes saved successfully to {storage_dir}")
