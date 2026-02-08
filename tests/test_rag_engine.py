@@ -15,13 +15,23 @@ class TestRAGEngine:
         # Setup mocks
         mock_openai.return_value = MockLLM()
         mock_embed.return_value = MockEmbedding(embed_dim=1536)
-        mock_vector_service.return_value.index = MagicMock()
+        
+        # Simuler des nodes pour activer le QueryFusionRetriever
+        mock_vs_instance = mock_vector_service.return_value
+        mock_vs_instance.index = MagicMock()
+        # Utiliser un vrai TextNode au lieu d'un MagicMock pour éviter les erreurs de sérialisation JSON
+        test_node = TextNode(text="Contenu de test pour BM25")
+        mock_vs_instance.storage_context.docstore.docs = {"node_1": test_node}
     
         # Initialize engine
         engine = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")
         
         # Assertions
         assert engine.vector_service is not None
+        assert engine.fusion_retriever is not None
+        # Durcissement : Vérification de la configuration interne du retriever
+        assert engine.fusion_retriever.mode == "reciprocal_rerank"
+        assert engine.fusion_retriever.similarity_top_k == 15
         
     @patch('src.generation.rag_engine.VectorService')
     @patch('src.generation.rag_engine.OpenAI')

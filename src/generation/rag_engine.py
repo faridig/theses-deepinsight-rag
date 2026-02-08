@@ -83,7 +83,7 @@ class RAGEngine:
             [vector_retriever, bm25_retriever],
             similarity_top_k=candidate_top_k,
             num_queries=1, # On ne fait pas de multi-query pour rester dans les clous de performance
-            mode="reciprocal_rank_fusion",
+            mode="reciprocal_rerank",
             use_async=True
         )
         
@@ -155,8 +155,8 @@ class RAGEngine:
                     file_name = metadata.get("file_name", metadata.get("file_path", "Document Inconnu"))
                     title = metadata.get("titre", file_name)
                     
-                    text_snippet = node.get_text()[:150].strip().replace('\n', ' ')
-                    if len(node.get_text()) > 150:
+                    text_snippet = node.get_content()[:150].strip().replace('\n', ' ')
+                    if len(node.get_content()) > 150:
                         text_snippet += "..."
                     
                     unique_key = (title, page_label)
