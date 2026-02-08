@@ -40,3 +40,4 @@ outputs/
 Thumbs.db
 storage/
 venv_test/
+.venv/

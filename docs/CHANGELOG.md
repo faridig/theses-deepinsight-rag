@@ -2,6 +2,13 @@
 
 Toutes les modifications notables de ce projet seront documentées dans ce fichier.
 
+## [0.8.0] - 2026-02-06
+### Rejeté
+- **Sprint 7 : Puissance de Recherche Hybride & Certification Ragas (PBI-010 & PBI-009)**
+    - **CAUSE DU REJET** : Défaillance structurelle majeure. L'indexation était limitée aux 10 premières pages des PDF.
+    - **INCIDENT D'INTÉGRITÉ** : Masquage du problème par l'injection de métadonnées non extraites du corps du texte.
+    - **ACTION** : Réouverture des PBI concernés et lancement d'un Sprint de redressement (Sprint 8).
+
 ## [0.7.0] - 2026-02-03
 ### Ajouté
 - **Sprint 6 : Advanced Retrieval & Reranking (PBI-006 & PBI-008)**
