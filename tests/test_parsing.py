@@ -1,6 +1,5 @@
 import os
 from src.processing.parser import ThesisParser
-from llama_index.core.schema import TextNode, BaseNode
 from llama_index.core import Document
 from unittest.mock import patch
 from typing import List
@@ -9,42 +8,33 @@ def test_thesis_parser_initialization():
     parser = ThesisParser(api_key="fake_key")
     assert parser is not None
 
-def test_sentence_window_node_parser_metadata():
-    # Ce test vérifiera que les nodes produits par le SentenceWindowNodeParser
-    # contiennent bien la clé 'window' dans les métadonnées.
-    parser = ThesisParser(api_key="fake_key")
-    text = "Ceci est la première phrase. Ceci est la deuxième phrase. Ceci est la troisième phrase. Ceci est la quatrième phrase. Ceci est la cinquième phrase."
-    doc = Document(text=text)
-    
-    nodes = parser._create_nodes([doc])
-    
-    assert len(nodes) > 0
-    # Vérifier si au moins un node a la métadonnée 'window'
-    assert 'window' in nodes[0].metadata
-
-def test_parse_pdf_dev_mode():
+def test_parse_pdf_full_mode():
     parser = ThesisParser(api_key="fake_key")
     
     with patch('src.processing.parser.LlamaParse') as mock_llama_parse:
         mock_instance = mock_llama_parse.return_value
         mock_instance.load_data.return_value = [Document(text="Test content", metadata={"page_number": 1})]
         
-        nodes = parser.parse_pdf("dummy.pdf", is_dev=True)
+        # Test without is_dev parameter which was removed
+        documents = parser.parse_pdf("dummy.pdf")
         
-        # Check if LlamaParse was called with target_pages="0-9"
         mock_llama_parse.assert_called_once()
         _, kwargs = mock_llama_parse.call_args
-        assert kwargs['target_pages'] == "0-9"
-        assert len(nodes) > 0
+        # Verify that max_pages is NOT in kwargs
+        assert 'max_pages' not in kwargs
+        assert kwargs.get('full_parse') is True
+        assert len(documents) > 0
 
-def test_save_nodes(tmp_path):
+def test_parse_pdf_with_metadata():
     parser = ThesisParser(api_key="fake_key")
-    # Cast explicitly to List[BaseNode] to satisfy type checker if needed
-    nodes: List[BaseNode] = [TextNode(text="Test node", metadata={"window": "context"})]
+    extra_meta = {"thesis_id": "123", "author": "John Doe"}
     
-    storage_dir = tmp_path / "storage"
-    parser.save_nodes(nodes, storage_dir=str(storage_dir))
-    
-    assert os.path.exists(storage_dir)
-    # LlamaIndex persists multiple files, check for one of them
-    assert any(os.path.exists(storage_dir / f) for f in ["docstore.json", "default__vector_store.json"])
+    with patch('src.processing.parser.LlamaParse') as mock_llama_parse:
+        mock_instance = mock_llama_parse.return_value
+        mock_instance.load_data.return_value = [Document(text="Test content")]
+        
+        documents = parser.parse_pdf("dummy.pdf", extra_metadata=extra_meta)
+        
+        assert len(documents) == 1
+        assert documents[0].metadata["thesis_id"] == "123"
+        assert documents[0].metadata["author"] == "John Doe"
