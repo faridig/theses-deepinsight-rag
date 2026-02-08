@@ -44,6 +44,7 @@ class ThesisParser:
             "result_type": "markdown",
             "verbose": True,
             "language": "fr",
+            "premium_mode": True, # Active le mode full_parse pour l'exhaustivité (PBI-011)
         }
         
         parser = LlamaParse(**parser_args)

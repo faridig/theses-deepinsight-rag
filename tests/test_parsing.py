@@ -22,7 +22,7 @@ def test_parse_pdf_full_mode():
         _, kwargs = mock_llama_parse.call_args
         # Verify that max_pages is NOT in kwargs
         assert 'max_pages' not in kwargs
-        assert 'full_parse' not in kwargs
+        assert kwargs.get('premium_mode') is True
         assert len(documents) > 0
         assert documents[0].metadata["page_number"] == 1
         assert documents[0].metadata["file_name"] == "dummy.pdf"

@@ -4,35 +4,41 @@ from src.generation.rag_engine import RAGEngine
 from llama_index.core.llms.mock import MockLLM
 
 class TestAdvancedRetrieval:
+    @patch('src.generation.rag_engine.BM25Retriever')
     @patch('src.generation.rag_engine.VectorService')
     @patch('src.generation.rag_engine.OpenAI')
     @patch('src.generation.rag_engine.CohereRerank')
     @patch('src.generation.rag_engine.QueryFusionRetriever')
     @patch('src.generation.rag_engine.RetrieverQueryEngine')
-    def test_advanced_retrieval_setup(self, mock_retriever_qe, mock_fusion, mock_cohere, mock_openai, mock_vector_service):
+    def test_advanced_retrieval_setup(self, mock_retriever_qe, mock_fusion, mock_cohere, mock_openai, mock_vector_service, mock_bm25):
         # Setup environment variable for Cohere
         with patch.dict(os.environ, {"COHERE_API_KEY": "test_key"}):
             # Setup mocks
             mock_openai.return_value = MockLLM()
             mock_index = MagicMock()
-            mock_vector_service.return_value.index = mock_index
+            mock_vector_service_instance = mock_vector_service.return_value
+            mock_vector_service_instance.index = mock_index
+            
             mock_base_retriever = MagicMock()
-            mock_index.as_retriever.return_value = mock_base_retriever
+            mock_vector_service_instance.get_retriever.return_value = mock_base_retriever
+            
+            # Pour éviter l'échec sur BM25 (nodes)
+            mock_vector_service_instance.storage_context.docstore.docs = {"node1": MagicMock()}
             
             # Initialize engine
             _ = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")
             
             # 1. Vérification du pool de candidats (Optimisation CA-1 : top_k=15)
-            mock_index.as_retriever.assert_called_with(similarity_top_k=15)
+            mock_vector_service_instance.get_retriever.assert_called_with(similarity_top_k=15)
             
             # 2. Vérification de QueryFusionRetriever (Optimisation CA-1)
             mock_fusion.assert_called_once()
             _, fusion_kwargs = mock_fusion.call_args
-            # num_queries=3 pour capture par ID/Titre
-            assert fusion_kwargs['num_queries'] == 3
-            # similarity_top_k=20 pour CA-1
-            assert fusion_kwargs['similarity_top_k'] == 20
-            assert "RECIPROCAL_RANK" in str(fusion_kwargs['mode'])
+            # num_queries=1 pour la performance (PBI-006 update)
+            assert fusion_kwargs['num_queries'] == 1
+            # similarity_top_k=15 pour cohérence avec le pool de candidats
+            assert fusion_kwargs['similarity_top_k'] == 15
+            assert "RECIPROCAL_RANK" in str(fusion_kwargs['mode']).upper()
             assert fusion_kwargs['use_async'] is True
             
             # 3. Vérification du Reranker Cohere (Top 5 exigé)
