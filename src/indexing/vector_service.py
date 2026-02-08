@@ -1,49 +1,59 @@
-from llama_index.core.schema import BaseNode, Document
-from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.retrievers import ParentDocumentRetriever
-from llama_index.core.storage.docstore import SimpleDocumentStore
+import logging
+import os
+import shutil
+from typing import List, Optional
+import chromadb
+from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.ingestion import IngestionPipeline
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.schema import BaseNode, Document
+from llama_index.core.storage.docstore import SimpleDocumentStore
+from llama_index.core.storage.storage_context import StorageContext
+from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class VectorService:
     """
     Service for managing vector indexing and retrieval using ChromaDB and LlamaIndex.
-    Implements a Parent-Child retrieval strategy for robust search on long documents.
+    Implements a robust retrieval strategy for long documents.
     """
     def __init__(self, storage_path: str = "./storage/chroma", collection_name: str = "theses_collection"):
-        try:
-            from llama_index.core.embeddings import MockEmbedding
-            is_mock = isinstance(Settings.embed_model, MockEmbedding)
-        except ImportError:
-            is_mock = False
+        """
+        Initializes the VectorService.
 
-        if not is_mock:
-            Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
-        
+        Args:
+            storage_path (str): The path to the storage directory for ChromaDB and LlamaIndex data.
+            collection_name (str): The name of the ChromaDB collection.
+        """
         self.storage_path = storage_path
         self.collection_name = collection_name
-        self.child_collection_name = f"{collection_name}_children"
         
+        # Ensure the storage directory exists
         os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
         
+        # Initialize ChromaDB
         self.db = chromadb.PersistentClient(path=self.storage_path)
-        
-        # Collection for parent document chunks
         self.chroma_collection = self.db.get_or_create_collection(self.collection_name)
         self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
         
-        # Collection for child document chunks
-        self.child_chroma_collection = self.db.get_or_create_collection(self.child_collection_name)
-        self.child_vector_store = ChromaVectorStore(chroma_collection=self.child_chroma_collection)
-        
-        self.docstore = SimpleDocumentStore()
-        
+        # Initialize Docstore
+        docstore_path = os.path.join(self.storage_path, "docstore.json")
+        if os.path.exists(docstore_path):
+            self.docstore = SimpleDocumentStore.from_persist_path(docstore_path)
+        else:
+            self.docstore = SimpleDocumentStore()
+            
         self.storage_context = StorageContext.from_defaults(
             vector_store=self.vector_store,
             docstore=self.docstore
         )
         
         self._index: Optional[VectorStoreIndex] = None
-        
+
     @property
     def index(self) -> VectorStoreIndex:
         """Returns the current index, loading it from the vector store if necessary."""
@@ -56,38 +66,64 @@ class VectorService:
 
     def index_documents(self, documents: List[Document]):
         """
-        Indexes documents using a Parent-Child strategy.
-        - Large chunks (parents) are stored in the docstore.
-        - Small chunks (children) are stored in the vector store for retrieval.
-        """
-        # Ingest documents into the docstore
-        for doc in documents:
-            self.docstore.add_documents([doc], allow_update=True)
-            
-        # Create child nodes from parent documents
-        child_parser = SentenceSplitter(chunk_size=512)
+        Indexes documents.
         
-        pipeline = IngestionPipeline(
-            transformations=[child_parser],
-            vector_store=self.child_vector_store,
+        Args:
+            documents (List[Document]): The documents to index.
+        """
+        logger.info(f"Indexing {len(documents)} documents...")
+        
+        # We use VectorStoreIndex.from_documents which is more robust
+        # and automatically uses the storage_context
+        # We also need to ensure that nodes are stored in the docstore for BM25
+        self._index = VectorStoreIndex.from_documents(
+            documents,
+            storage_context=self.storage_context,
+            show_progress=True
+        )
+        self.storage_context.persist(persist_dir=self.storage_path)
+        logger.info("Indexing completed and persisted.")
+
+    def reset(self):
+        """
+        Completely resets the service by clearing the collection and the docstore.
+        (PBI-011 Scenario 0)
+        """
+        logger.warning(f"Resetting vector storage for collection: {self.collection_name}")
+        
+        # 1. Clear in-memory state
+        self._index = None
+        
+        # 2. Delete and recreate the collection
+        try:
+            self.db.delete_collection(self.collection_name)
+            logger.info(f"Collection {self.collection_name} deleted.")
+        except Exception as e:
+            logger.warning(f"Could not delete collection: {e}")
+            
+        self.chroma_collection = self.db.get_or_create_collection(self.collection_name)
+        self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
+        
+        # 3. Clear the docstore
+        self.docstore = SimpleDocumentStore()
+        
+        # 4. Re-initialize storage context
+        self.storage_context = StorageContext.from_defaults(
+            vector_store=self.vector_store,
             docstore=self.docstore
         )
         
-        # This will run the pipeline and store child nodes in the child_vector_store
-        pipeline.run(documents=documents, show_progress=True)
-        
-        # Persist the docstore
-        self.storage_context.persist(persist_dir=self.storage_path)
+        # 5. Persist the empty state to disk to overwrite old data
+        if os.path.exists(self.storage_path):
+            self.storage_context.persist(persist_dir=self.storage_path)
+            
+        logger.info("Vector service has been reset and re-initialized.")
 
     def get_retriever(self, similarity_top_k: int = 10):
         """
-        Returns a ParentDocumentRetriever for robust retrieval on long documents.
+        Returns a retriever for the index.
         """
-        return ParentDocumentRetriever(
-            vector_store=self.child_vector_store,
-            docstore=self.docstore,
-            similarity_top_k=similarity_top_k
-        )
+        return self.index.as_retriever(similarity_top_k=similarity_top_k)
 
     def query(self, query_text: str, similarity_top_k: int = 10):
         """
@@ -95,39 +131,3 @@ class VectorService:
         """
         retriever = self.get_retriever(similarity_top_k=similarity_top_k)
         return retriever.retrieve(query_text)
-
-    def reset_collection(self):
-        """
-        Deletes and recreates the ChromaDB collections and clears LlamaIndex storage.
-        """
-        print(f"ATTENTION: Deleting collections '{self.collection_name}', '{self.child_collection_name}' and storage files in {self.storage_path}...")
-        
-        llama_index_files = ["docstore.json", "index_store.json", "graph_store.json", "image_store.json"]
-        for filename in llama_index_files:
-            file_path = os.path.join(self.storage_path, filename)
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                print(f"Deleted {filename}")
-        
-        try:
-            self.db.delete_collection(name=self.collection_name)
-            self.db.delete_collection(name=self.child_collection_name)
-        except Exception as e:
-            print(f"Could not delete collection, it might not exist: {e}")
-        
-        self.chroma_collection = self.db.get_or_create_collection(self.collection_name)
-        self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
-        
-        self.child_chroma_collection = self.db.get_or_create_collection(self.child_collection_name)
-        self.child_vector_store = ChromaVectorStore(chroma_collection=self.child_chroma_collection)
-
-        self.docstore = SimpleDocumentStore()
-        
-        self.storage_context = StorageContext.from_defaults(
-            vector_store=self.vector_store,
-            docstore=self.docstore
-        )
-        self._index = None
-        
-        print(f"Collections and storage fully reset.")
-

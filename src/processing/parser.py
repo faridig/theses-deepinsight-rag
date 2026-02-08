@@ -25,13 +25,12 @@ class ThesisParser:
             # but we'll check it before calling LlamaParse
             pass
 
-    def parse_pdf(self, file_path: str, is_dev: bool = False, extra_metadata: Optional[Dict] = None) -> List[Document]:
+    def parse_pdf(self, file_path: str, extra_metadata: Optional[Dict] = None) -> List[Document]:
         """
         Parses a PDF file using LlamaParse and returns a list of Document objects.
         
         Args:
             file_path: Path to the PDF file.
-            is_dev: If True, limits parsing to the first 20 pages to save quota. Defaults to False.
             extra_metadata: Optional metadata to add to the documents.
             
         Returns:
@@ -48,9 +47,6 @@ class ThesisParser:
             "full_parse": True,
         }
         
-        if is_dev:
-            parser_args["max_pages"] = 20
-            
         parser = LlamaParse(**parser_args)
         
         documents = parser.load_data(file_path)

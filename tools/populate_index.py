@@ -51,7 +51,7 @@ def populate_index(
     vector_service = VectorService(storage_path="./storage/chroma", collection_name="theses_collection")
     
     if reset_index:
-        vector_service.reset_collection()
+        vector_service.reset()
     
     total_estimated_pages = 0 # Ajout de l'initialisation
     all_documents = [] # Changé de all_nodes à all_documents
@@ -69,8 +69,8 @@ def populate_index(
             
         logger.info(f"Parsing de {file_path}...")
         try:
-            # On utilise le mode dev pour limiter le parsing si on n'est pas en run de production
-            documents = parser.parse_pdf(str(file_path), is_dev=not is_production_run, extra_metadata=metadata)
+            # On ne limite plus le parsing par page, mais on peut toujours limiter le nombre de fichiers
+            documents = parser.parse_pdf(str(file_path), extra_metadata=metadata)
             
             # Plus besoin d'injecter les métadonnées ici, c'est fait dans le parser
             all_documents.extend(documents) # Changé de all_nodes.extend(nodes) à all_documents.extend(documents)

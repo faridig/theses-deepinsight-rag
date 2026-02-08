@@ -42,7 +42,7 @@ def reindex_real_data():
     from src.ingestion.theses_client import ThesesClient
     theses_client = ThesesClient()
 
-    all_nodes = []
+    all_documents = []
     
     for pdf_path in pdf_files:
         thesis_id = pdf_path.stem
@@ -74,20 +74,20 @@ def reindex_real_data():
                 "date": metadata["date"],
                 "discipline": metadata["discipline"]
             }
-            # PBI-011: Utilisation du mode full_parse (is_dev=False) pour une indexation exhaustive
-            nodes = parser.parse_pdf(str(pdf_path), is_dev=False, extra_metadata=extra_meta)
+            # PBI-011: Indexation exhaustive
+            documents = parser.parse_pdf(str(pdf_path), extra_metadata=extra_meta)
             
-            all_nodes.extend(nodes)
-            logger.info(f"OK : {len(nodes)} nœuds extraits pour {thesis_id}")
+            all_documents.extend(documents)
+            logger.info(f"OK : {len(documents)} documents extraits pour {thesis_id}")
         except Exception as e:
             logger.error(f"Échec du parsing pour {pdf_path.name} : {e}")
 
-    if all_nodes:
-        logger.info(f"Indexation de {len(all_nodes)} nœuds réels dans ChromaDB...")
-        vector_service.index_nodes(all_nodes)
+    if all_documents:
+        logger.info(f"Indexation de {len(all_documents)} documents réels dans ChromaDB...")
+        vector_service.index_documents(all_documents)
         logger.info("Indexation réelle terminée.")
     else:
-        logger.error("Aucun nœud extrait. L'index reste vide.")
+        logger.error("Aucun document extrait. L'index reste vide.")
 
 if __name__ == "__main__":
     reindex_real_data()
