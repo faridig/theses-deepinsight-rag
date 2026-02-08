@@ -66,23 +66,33 @@ class VectorService:
 
     def index_documents(self, documents: List[Document]):
         """
-        Indexes documents.
+        Indexes documents by parsing them into nodes and storing them in both
+        the vector store and the docstore for hybrid search.
         
         Args:
             documents (List[Document]): The documents to index.
         """
         logger.info(f"Indexing {len(documents)} documents...")
         
-        # We use VectorStoreIndex.from_documents which is more robust
-        # and automatically uses the storage_context
-        # We also need to ensure that nodes are stored in the docstore for BM25
-        self._index = VectorStoreIndex.from_documents(
-            documents,
+        # Use a consistent splitter (PBI-010/011)
+        splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
+        nodes = splitter.get_nodes_from_documents(documents)
+        
+        logger.info(f"Created {len(nodes)} nodes from {len(documents)} documents.")
+        
+        # Add nodes to docstore for BM25 (PBI-010)
+        self.storage_context.docstore.add_documents(nodes)
+        
+        # Create/Update index from nodes
+        self._index = VectorStoreIndex(
+            nodes,
             storage_context=self.storage_context,
             show_progress=True
         )
+        
+        # Persist everything
         self.storage_context.persist(persist_dir=self.storage_path)
-        logger.info("Indexing completed and persisted.")
+        logger.info(f"Indexing completed. Docstore size: {len(self.docstore.docs)}")
 
     def reset(self):
         """

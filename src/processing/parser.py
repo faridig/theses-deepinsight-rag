@@ -44,15 +44,23 @@ class ThesisParser:
             "result_type": "markdown",
             "verbose": True,
             "language": "fr",
-            "full_parse": True,
         }
         
         parser = LlamaParse(**parser_args)
         
+        # Load data returns a list of Document objects
         documents = parser.load_data(file_path)
         
-        if extra_metadata:
-            for doc in documents:
+        # Ensure metadata is correctly set for each document
+        # PBI-012: Capture essential metadata for transparency
+        file_name = os.path.basename(file_path)
+        for doc in documents:
+            # LlamaParse often puts page info in metadata, but we ensure it's there
+            doc.metadata["file_name"] = file_name
+            if "page_number" not in doc.metadata and "page" in doc.metadata:
+                doc.metadata["page_number"] = doc.metadata["page"]
+            
+            if extra_metadata:
                 doc.metadata.update(extra_metadata)
                 
         return documents

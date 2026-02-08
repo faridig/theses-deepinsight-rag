@@ -151,7 +151,7 @@ class RAGEngine:
                     node = node_with_score.node
                     metadata = node.metadata
                     
-                    page_label = metadata.get("page_label", "N/A")
+                    page_label = metadata.get("page_number", metadata.get("page_label", "N/A"))
                     file_name = metadata.get("file_name", metadata.get("file_path", "Document Inconnu"))
                     title = metadata.get("titre", file_name)
                     

@@ -13,7 +13,7 @@ def test_parse_pdf_full_mode():
     
     with patch('src.processing.parser.LlamaParse') as mock_llama_parse:
         mock_instance = mock_llama_parse.return_value
-        mock_instance.load_data.return_value = [Document(text="Test content", metadata={"page_number": 1})]
+        mock_instance.load_data.return_value = [Document(text="Test content", metadata={"page": 1})]
         
         # Test without is_dev parameter which was removed
         documents = parser.parse_pdf("dummy.pdf")
@@ -22,8 +22,10 @@ def test_parse_pdf_full_mode():
         _, kwargs = mock_llama_parse.call_args
         # Verify that max_pages is NOT in kwargs
         assert 'max_pages' not in kwargs
-        assert kwargs.get('full_parse') is True
+        assert 'full_parse' not in kwargs
         assert len(documents) > 0
+        assert documents[0].metadata["page_number"] == 1
+        assert documents[0].metadata["file_name"] == "dummy.pdf"
 
 def test_parse_pdf_with_metadata():
     parser = ThesisParser(api_key="fake_key")

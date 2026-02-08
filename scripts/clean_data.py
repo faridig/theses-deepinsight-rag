@@ -12,10 +12,12 @@ def clean_data_files(data_dir="data/"):
             except OSError as e:
                 print(f"Erreur lors de la suppression de {filepath}: {e}")
 
-# Réinitialiser la collection ChromaDB (implémentation à adapter)
+# Réinitialiser la collection ChromaDB via VectorService
 def reset_chromadb():
-    # TODO: Implémenter la réinitialisation de ChromaDB ici
-    print("Réinitialisation de ChromaDB non implémentée.")
+    from src.indexing.vector_service import VectorService
+    service = VectorService()
+    service.reset()
+    print("Réinitialisation de ChromaDB effectuée via VectorService.")
 
 
 if __name__ == "__main__":
