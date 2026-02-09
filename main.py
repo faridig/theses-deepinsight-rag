@@ -71,9 +71,9 @@ def setup_observability():
                 set_global_handler("arize_phoenix")
                 return
             else:
-                print(f"🚨 Incident gRPC Port {GRPC_PORT} : [IPv4:{report['ipv4']}, IPv6:{report['ipv6']}, Bindable:{report['bindable']}]")
-                print(f"Détail : {report['error']}")
-                print("⚠️ Désactivation de l'instrumentation pour éviter tout conflit.")
+                logging.warning(f"Incident gRPC Port {GRPC_PORT} : [IPv4:{report['ipv4']}, IPv6:{report['ipv6']}, Bindable:{report['bindable']}]")
+                logging.warning(f"Détail : {report['error']}")
+                logging.warning("Désactivation de l'instrumentation pour éviter tout conflit.")
                 return
 
         # Tentative de lancement
