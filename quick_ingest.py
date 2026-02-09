@@ -14,7 +14,7 @@ def main():
     print(f"Parsing {pdf_path}...")
     documents = parser.parse_pdf(pdf_path)
     print(f"Indexing {len(documents)} docs...")
-    service.index_documents(documents)
+    service.index_nodes(documents)
     print("Ingestion terminée.")
 
 if __name__ == "__main__":
