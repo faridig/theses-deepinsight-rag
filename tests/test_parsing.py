@@ -2,7 +2,7 @@ import os
 from src.processing.parser import ThesisParser
 from llama_index.core.schema import TextNode, BaseNode
 from llama_index.core import Document
-from unittest.mock import patch
+
 from typing import List
 
 def test_thesis_parser_initialization():

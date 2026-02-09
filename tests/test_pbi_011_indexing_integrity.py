@@ -1,8 +1,5 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from src.processing.parser import ThesisParser
-from llama_parse import LlamaParse
-import os
 
 # We mock the environment variable just to allow ThesisParser to initialize
 @patch.dict('os.environ', {'LLAMA_CLOUD_API_KEY': 'DUMMY_KEY'})
@@ -67,7 +64,7 @@ class TestPBI011IndexingIntegrity:
         parser = ThesisParser()
         
         # Act
-        nodes = parser.parse_pdf(file_path="dummy/path/to/thesis.pdf")
+        _ = parser.parse_pdf(file_path="dummy/path/to/thesis.pdf")
         
         # Assert
         # Assert that the code path for manual metadata injection (e.g., in _create_nodes) 
