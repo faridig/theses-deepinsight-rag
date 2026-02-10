@@ -3,11 +3,11 @@ from datasets import Dataset
 import logging
 from ragas.llms import LlamaIndexLLMWrapper
 from ragas.embeddings import LlamaIndexEmbeddingsWrapper
-from ragas.metrics import (
-    faithfulness,
-    answer_relevancy,
-    context_precision,
-    context_recall,
+from ragas.metrics.collections import (
+    Faithfulness,
+    AnswerRelevancy,
+    ContextPrecision,
+    ContextRecall,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,14 @@ class RagasEvaluator:
         # On utilise les wrappers Ragas pour LlamaIndex
         self.evaluator_llm = LlamaIndexLLMWrapper(Settings.llm)
         self.evaluator_embeddings = LlamaIndexEmbeddingsWrapper(Settings.embed_model)
+        
+        # Initialisation des métriques (PBI-009)
+        self.metrics = [
+            Faithfulness(llm=self.evaluator_llm),
+            AnswerRelevancy(llm=self.evaluator_llm, embeddings=self.evaluator_embeddings),
+            ContextPrecision(llm=self.evaluator_llm),
+            ContextRecall(llm=self.evaluator_llm),
+        ]
 
     def run_evaluation(self, test_items: list[RagasTestItem]):
         """
@@ -69,20 +77,11 @@ class RagasEvaluator:
         
         from ragas import evaluate
 
-        # Configurer les métriques
-        metrics = [
-            faithfulness,
-            answer_relevancy,
-            context_precision,
-            context_recall,
-        ]
-
         logger.info("Lancement de l'évaluation Ragas...")
+        # Note: On passe les métriques déjà initialisées
         result = evaluate(
             dataset=dataset,
-            metrics=metrics,
-            llm=self.evaluator_llm,
-            embeddings=self.evaluator_embeddings
+            metrics=self.metrics,
         )
         
         # Intégration Phoenix (PBI-009)
@@ -95,7 +94,6 @@ class RagasEvaluator:
         Exporte les résultats Ragas vers Arize Phoenix.
         """
         try:
-            
             logger.info("Export des scores Ragas vers Phoenix...")
             
             # Conversion sécurisée en dictionnaire
