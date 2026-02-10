@@ -1,5 +1,4 @@
 
-import pytest
 from llama_index.core.schema import TextNode, NodeWithScore
 from src.generation.rag_engine import DiversityPostprocessor
 
@@ -29,7 +28,7 @@ class TestDiversityPostprocessor:
         assert len(filtered_nodes) == 3
         
         # On doit avoir le meilleur de A (score 0.9)
-        assert filtered_nodes[0].node.text == "Fragment 1 Doc A"
+        assert filtered_nodes[0].node.get_content() == "Fragment 1 Doc A"
         assert filtered_nodes[0].score == 0.9
         
         # On doit avoir B et C
