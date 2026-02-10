@@ -63,6 +63,27 @@ class NodeCleaningProcessor(BaseNodePostprocessor):
                 
         return nodes
 
+class DiversityPostprocessor(BaseNodePostprocessor):
+    """
+    Assure la diversité des sources en limitant le nombre de fragments par document (PBI-015).
+    """
+    target_top_n: int = 3
+
+    def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
+        unique_docs = {}
+        for node_with_score in nodes:
+            # On utilise le titre comme identifiant de thèse
+            doc_id = node_with_score.node.metadata.get("titre", node_with_score.node.node_id)
+            
+            if doc_id not in unique_docs:
+                unique_docs[doc_id] = node_with_score
+            
+            # On continue pour s'assurer qu'on a bien les meilleurs de chaque
+            # Le tri est préservé car l'entrée est supposée triée par le Reranker
+            
+        filtered_nodes = list(unique_docs.values())
+        return filtered_nodes[:self.target_top_n]
+
 class RAGEngine:
     """
     Moteur RAG pour interroger les thèses avec Sentence Window Retrieval.
@@ -118,7 +139,7 @@ class RAGEngine:
         self.reranker = CohereRerank(
             api_key=cohere_api_key,
             model="rerank-multilingual-v3.0",
-            top_n=3
+            top_n=RETRIEVAL_TOP_K
         )
 
         # 6. Assemblage du Retriever Fusionné (PBI-010 - Hybrid Search)
@@ -171,7 +192,8 @@ class RAGEngine:
         # Note: On fusionne les post-processeurs
         all_post_processors: List[BaseNodePostprocessor] = [
             *self.post_processors,
-            self.reranker
+            self.reranker,
+            DiversityPostprocessor(target_top_n=3)
         ]
         
         self.query_engine = RetrieverQueryEngine(
