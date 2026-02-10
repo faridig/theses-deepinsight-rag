@@ -18,7 +18,7 @@ from typing import List
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import TextNode, NodeWithScore, QueryBundle
 from src.indexing.vector_service import VectorService
-from typing import List, Optional
+from typing import Optional
 
 # Configuration des logs
 

@@ -8,6 +8,8 @@ from src.generation.rag_engine import RAGEngine
 
 # 1. Stratégie Radicale : Silence total des logs OpenTelemetry
 logging.getLogger("opentelemetry.sdk.trace.export").setLevel(logging.CRITICAL)
+logging.getLogger("chromadb").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def check_port_occupancy(port: int):
     """

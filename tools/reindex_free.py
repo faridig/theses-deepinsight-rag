@@ -1,13 +1,11 @@
 import os
 import logging
 from pathlib import Path
-from llama_index.core import SimpleDirectoryReader, Settings
+from llama_index.core import SimpleDirectoryReader
 from llama_index.core.node_parser import SentenceWindowNodeParser
 from src.indexing.vector_service import VectorService
 from src.ingestion.theses_client import ThesesClient
-from src.generation.rag_engine import RAGEngine
 from dotenv import load_dotenv
-import chromadb
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)

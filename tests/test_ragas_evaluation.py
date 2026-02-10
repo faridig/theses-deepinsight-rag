@@ -64,7 +64,7 @@ def test_ragas_evaluation_execution():
         scores_dict = dict(results) if not isinstance(results, dict) else results
         for metric, score in scores_dict.items():
             logger.info(f"Métrique {metric} : {score:.4f}")
-    except Exception as e:
+    except Exception:
         logger.info(f"Scores globaux : {results}")
 
     assert results is not None

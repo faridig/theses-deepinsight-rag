@@ -6,7 +6,8 @@ def main():
     parser = ThesisParser()
     service = VectorService()
     
-    pdf_path = "data/2024PA131029.pdf" # Un fichier existant
+    # Correction du nom de fichier
+    pdf_path = "data/2024STRAB004.pdf" # Un fichier existant
     if not os.path.exists(pdf_path):
         print(f"Fichier {pdf_path} non trouvé.")
         return

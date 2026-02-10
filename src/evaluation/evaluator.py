@@ -1,8 +1,6 @@
 from llama_index.core import Settings
-import pandas as pd
 from datasets import Dataset
 import logging
-import os
 from ragas.llms import LlamaIndexLLMWrapper
 from ragas.embeddings import LlamaIndexEmbeddingsWrapper
 from ragas.metrics import (
@@ -97,7 +95,6 @@ class RagasEvaluator:
         Exporte les résultats Ragas vers Arize Phoenix.
         """
         try:
-            import phoenix as px
             
             logger.info("Export des scores Ragas vers Phoenix...")
             
@@ -106,7 +103,7 @@ class RagasEvaluator:
             if not isinstance(scores_dict, dict):
                 try:
                     scores_dict = dict(result)
-                except:
+                except Exception:
                     scores_dict = {}
             
             # Affichage des scores dans les logs
