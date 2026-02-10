@@ -36,7 +36,7 @@ class TestAdvancedRetrieval:
             # Assertions for CohereRerank
             mock_cohere.assert_called_once()
             _, cohere_kwargs = mock_cohere.call_args
-            assert cohere_kwargs['top_n'] == 3
+            assert cohere_kwargs['top_n'] == 10
             assert cohere_kwargs['api_key'] == "test_key"
             assert cohere_kwargs['model'] == "rerank-multilingual-v3.0"
             
