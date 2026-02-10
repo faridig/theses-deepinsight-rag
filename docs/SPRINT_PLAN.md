@@ -30,4 +30,4 @@
 - **CA-4** : Aucun ralentissement majeur n'est constaté (< 5s pour une réponse complète hybride + rerank).
 
 ---
-**STATUT : SPRINT DE QUALITÉ - PRÊT POUR EXÉCUTION**
+**STATUT : SPRINT DE QUALITÉ - EN COURS DE DÉMO**

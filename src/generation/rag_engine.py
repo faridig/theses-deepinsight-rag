@@ -16,14 +16,49 @@ from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
 from typing import List
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import TextNode, NodeWithScore, QueryBundle
 from src.indexing.vector_service import VectorService
+from typing import Optional
 
 # Configuration des logs
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Silence noisy libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("chromadb").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
+logging.getLogger("llama_index").setLevel(logging.WARNING)
+logging.getLogger("opentelemetry").setLevel(logging.ERROR)
+logging.getLogger("bm25s").setLevel(logging.WARNING)
+
 load_dotenv()
+
+class NodeCleaningProcessor(BaseNodePostprocessor):
+    """
+    Nettoie les métadonnées techniques pour réduire la consommation de tokens (PBI-012 Optimization).
+    """
+    def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
+        excluded_keys = [
+            "_node_content", "relationships", "file_path", "file_size", 
+            "creation_date", "last_modified_date", "original_text", 
+            "window", "doc_id", "document_id", "ref_doc_id", 
+            "_node_type", "file_type", "file_name"
+        ]
+        
+        for node_with_score in nodes:
+            node = node_with_score.node
+            # 1. Exclusion des clés techniques
+            node.excluded_llm_metadata_keys = excluded_keys
+            # 2. Simplification du formatage du texte (via templates LlamaIndex)
+            node.metadata_template = "{key} : {value}"
+            node.text_template = "THÈSE INFO :\n{metadata_str}\nEXTRAIT :\n{content}\n"
+            # 3. Garantie que page_label existe
+            if "page_label" not in node.metadata:
+                node.metadata["page_label"] = "N/A"
+                
+        return nodes
 
 class RAGEngine:
     """
@@ -53,6 +88,7 @@ class RAGEngine:
         # 3. Pipeline de Post-Processing (CRITIQUE)
         self.post_processors: List[BaseNodePostprocessor] = [
             MetadataReplacementPostProcessor(target_metadata_key="window"),
+            NodeCleaningProcessor(),
         ]
 
         # 4. Prompt Engineering (Français, Formel)
@@ -79,7 +115,7 @@ class RAGEngine:
         self.reranker = CohereRerank(
             api_key=cohere_api_key,
             model="rerank-multilingual-v3.0",
-            top_n=5
+            top_n=3
         )
 
         # 6. Assemblage du Retriever Fusionné (PBI-010 - Hybrid Search)
@@ -92,13 +128,18 @@ class RAGEngine:
             try:
                 chroma_data = self.vector_service.chroma_collection.get()
                 nodes = []
-                for i in range(len(chroma_data['ids'])):
-                    nodes.append(TextNode(
-                        text=chroma_data['documents'][i],
-                        id_=chroma_data['ids'][i],
-                        metadata=chroma_data['metadatas'][i]
-                    ))
-                logger.info(f"{len(nodes)} nodes récupérés depuis Chroma.")
+                ids = chroma_data.get('ids', [])
+                documents = chroma_data.get('documents', [])
+                metadatas = chroma_data.get('metadatas', [])
+                
+                if ids and documents:
+                    for i in range(len(ids)):
+                        nodes.append(TextNode(
+                            text=documents[i],
+                            id_=ids[i],
+                            metadata=metadatas[i] if metadatas and i < len(metadatas) else {}
+                        ))
+                    logger.info(f"{len(nodes)} nodes récupérés depuis Chroma.")
             except Exception as e:
                 logger.error(f"Erreur lors de la récupération des nodes depuis Chroma : {e}")
                 nodes = []
@@ -120,7 +161,7 @@ class RAGEngine:
             num_queries=3,
             mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=True,
-            verbose=True
+            verbose=False # Moins de bruit
         )
 
         # 7. Assemblage du Query Engine final
@@ -149,6 +190,25 @@ class RAGEngine:
         
         try:
             response = self.query_engine.query(question)
+            
+            # Post-traitement pour inclure les sources dans le texte de la réponse (PBI-012)
+            if hasattr(response, "source_nodes") and response.source_nodes:
+                sources_text = "\n\nSources :"
+                unique_sources = set()
+                for node in response.source_nodes:
+                    # Extraction sécurisée des métadonnées
+                    metadata = getattr(node, "metadata", {})
+                    title = metadata.get("titre", "Thèse Inconnue")
+                    author = metadata.get("auteur", "Auteur Inconnu")
+                    source_id = f"- {title} ({author})"
+                    if source_id not in unique_sources:
+                        unique_sources.add(source_id)
+                        sources_text += f"\n{source_id}"
+                
+                # Ajout au texte de la réponse si c'est une réponse standard (non-streaming)
+                if hasattr(response, "response") and isinstance(response.response, str):
+                    response.response += sources_text
+                
             return response
         except Exception as e:
             logger.error(f"Erreur lors de la génération de la réponse : {e}")

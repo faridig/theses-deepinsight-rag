@@ -1,5 +1,13 @@
 # Product Backlog - Theses-DeepInsight RAG
 
+# ⚙️ CONFIGURATION TECHNIQUE
+- **Langage** : Python 3.11+
+- **Framework RAG** : LlamaIndex
+- **Observabilité** : Arize Phoenix
+- **Évaluation** : Ragas
+- **Modèles LLM** : GPT-4o-mini (Génération), Cohere v3 (Reranking)
+- **Base de données Vectorielle** : ChromaDB
+
 Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques nécessaires au succès du projet.
 
 ## Sprints & Priorités
@@ -16,7 +24,10 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-008** | **Reranking & High Top-K** | Passage à top_k=20 et intégration d'un Reranker (Cohere) pour affiner la pertinence. | DONE | HAUTE |
 | **PBI-010** | **Recherche Hybride (BM25)** | Combinaison de la recherche sémantique et lexicale pour les termes techniques. | IN_PROGRESS | HAUTE |
 | **PBI-009** | **Évaluation Ragas** | Mesure scientifique de la fidélité, pertinence et précision du contexte (0-1). | IN_PROGRESS | HAUTE |
+| **PBI-014** | **Optimisation Reranking** | Réduction de la latence Cohere en passant top_k de 20 à 10 avec validation Ragas. | EN ATTENTE | HAUTE |
+| **PBI-015** | **Diversité des Sources (Anti-Overlap)** | Filtre de déduplication pour éviter le monopole d'une seule thèse dans le contexte. | EN ATTENTE | HAUTE |
+| **PBI-013** | **Nightly Audit : Évaluation sur Production** | Pipeline automatisé d'extraction et d'évaluation Ragas des traces Phoenix. | EN ATTENTE | HAUTE |
 | **PBI-007** | **LlamaParse Multimodal Premium** | Extraction avancée des graphiques et tableaux via GPT-4o. | EN ATTENTE | HAUTE |
 
 ---
-*Dernière mise à jour : 03/02/2026*
+*Dernière mise à jour : 10/02/2026*

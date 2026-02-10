@@ -70,8 +70,8 @@ def reindex_real_data():
 
         logger.info(f"Parsing réel de {pdf_path.name}...")
         try:
-            # On parse les 10 premières pages (is_dev=True) pour le hotfix
-            nodes = parser.parse_pdf(str(pdf_path), is_dev=True)
+            # On parse le document
+            nodes = parser.parse_pdf(str(pdf_path))
             
             for node in nodes:
                 node.metadata.update({

@@ -38,13 +38,12 @@ class ThesisParser:
             original_text_metadata_key="original_text",
         )
 
-    def parse_pdf(self, file_path: str, is_dev: bool = True) -> List[BaseNode]:
+    def parse_pdf(self, file_path: str) -> List[BaseNode]:
         """
-        Parses a PDF file using LlamaParse and returns a list of Nodes.
+        Parses a PDF file using LlamaParse and returns a list of Nodes, guaranteeing full-document parsing.
         
         Args:
             file_path: Path to the PDF file.
-            is_dev: If True, limits parsing to the first 10 pages to save quota.
             
         Returns:
             A list of Nodes.
@@ -52,9 +51,7 @@ class ThesisParser:
         if not self.api_key:
             raise ValueError("LLAMA_CLOUD_API_KEY must be provided or set in environment.")
             
-        # Initialize LlamaParse
-        # Note: LlamaParse supports 'target_pages' or similar via API parameters
-        # We use it here to limit pages if is_dev is True
+        # Initialize LlamaParse for full-document parsing (PBI-011: no arbitrary page limits)
         parser_args = {
             "api_key": self.api_key,
             "result_type": "markdown",
@@ -63,10 +60,6 @@ class ThesisParser:
             "vendor_multimodal_model_name": "openai-gpt4o",
         }
         
-        if is_dev:
-            # target_pages format can be "0-9" for the first 10 pages
-            parser_args["target_pages"] = "0-9"
-            
         parser = LlamaParse(**parser_args)
         
         # Load data from file
