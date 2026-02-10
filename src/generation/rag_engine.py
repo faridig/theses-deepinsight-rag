@@ -16,10 +16,12 @@ from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
 from typing import List
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import TextNode, NodeWithScore, QueryBundle
 from src.indexing.vector_service import VectorService
+from typing import List, Optional
 
 # Configuration des logs
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,31 @@ logging.getLogger("opentelemetry").setLevel(logging.ERROR)
 logging.getLogger("bm25s").setLevel(logging.WARNING)
 
 load_dotenv()
+
+class NodeCleaningProcessor(BaseNodePostprocessor):
+    """
+    Nettoie les métadonnées techniques pour réduire la consommation de tokens (PBI-012 Optimization).
+    """
+    def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
+        excluded_keys = [
+            "_node_content", "relationships", "file_path", "file_size", 
+            "creation_date", "last_modified_date", "original_text", 
+            "window", "doc_id", "document_id", "ref_doc_id", 
+            "_node_type", "file_type", "file_name"
+        ]
+        
+        for node_with_score in nodes:
+            node = node_with_score.node
+            # 1. Exclusion des clés techniques
+            node.excluded_llm_metadata_keys = excluded_keys
+            # 2. Simplification du formatage du texte (via templates LlamaIndex)
+            node.metadata_template = "{key} : {value}"
+            node.text_template = "THÈSE INFO :\n{metadata_str}\nEXTRAIT :\n{content}\n"
+            # 3. Garantie que page_label existe
+            if "page_label" not in node.metadata:
+                node.metadata["page_label"] = "N/A"
+                
+        return nodes
 
 class RAGEngine:
     """
@@ -61,6 +88,7 @@ class RAGEngine:
         # 3. Pipeline de Post-Processing (CRITIQUE)
         self.post_processors: List[BaseNodePostprocessor] = [
             MetadataReplacementPostProcessor(target_metadata_key="window"),
+            NodeCleaningProcessor(),
         ]
 
         # 4. Prompt Engineering (Français, Formel)
@@ -87,7 +115,7 @@ class RAGEngine:
         self.reranker = CohereRerank(
             api_key=cohere_api_key,
             model="rerank-multilingual-v3.0",
-            top_n=5
+            top_n=3
         )
 
         # 6. Assemblage du Retriever Fusionné (PBI-010 - Hybrid Search)

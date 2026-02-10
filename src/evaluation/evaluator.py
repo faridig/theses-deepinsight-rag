@@ -101,11 +101,17 @@ class RagasEvaluator:
             
             logger.info("Export des scores Ragas vers Phoenix...")
             
-            # Affichage des scores dans les logs (visibles dans Phoenix via l'instrumentation des traces)
-            for metric, score in result.items():
+            # Conversion sécurisée en dictionnaire
+            scores_dict = result.scores if hasattr(result, "scores") else result
+            if not isinstance(scores_dict, dict):
+                try:
+                    scores_dict = dict(result)
+                except:
+                    scores_dict = {}
+            
+            # Affichage des scores dans les logs
+            for metric, score in scores_dict.items():
                 logger.info(f"Phoenix Metric - {metric}: {score:.4f}")
             
-            # Note: L'instrumentation LlamaIndex + Phoenix capture déjà les spans.
-            # Les scores Ragas sont ici affichés dans le flux de log pour corrélation.
         except Exception as e:
             logger.warning(f"Export Phoenix échoué : {e}")
