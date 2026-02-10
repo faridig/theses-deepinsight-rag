@@ -23,6 +23,14 @@ from src.indexing.vector_service import VectorService
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Silence noisy libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("chromadb").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
+logging.getLogger("llama_index").setLevel(logging.WARNING)
+logging.getLogger("opentelemetry").setLevel(logging.ERROR)
+logging.getLogger("bm25s").setLevel(logging.WARNING)
+
 load_dotenv()
 
 class RAGEngine:
@@ -120,7 +128,7 @@ class RAGEngine:
             num_queries=3,
             mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=True,
-            verbose=True
+            verbose=False # Moins de bruit
         )
 
         # 7. Assemblage du Query Engine final
@@ -149,6 +157,25 @@ class RAGEngine:
         
         try:
             response = self.query_engine.query(question)
+            
+            # Post-traitement pour inclure les sources dans le texte de la réponse (PBI-012)
+            if hasattr(response, "source_nodes") and response.source_nodes:
+                sources_text = "\n\nSources :"
+                unique_sources = set()
+                for node in response.source_nodes:
+                    # Extraction sécurisée des métadonnées
+                    metadata = getattr(node, "metadata", {})
+                    title = metadata.get("titre", "Thèse Inconnue")
+                    author = metadata.get("auteur", "Auteur Inconnu")
+                    source_id = f"- {title} ({author})"
+                    if source_id not in unique_sources:
+                        unique_sources.add(source_id)
+                        sources_text += f"\n{source_id}"
+                
+                # Ajout au texte de la réponse si c'est une réponse standard (non-streaming)
+                if hasattr(response, "response") and isinstance(response.response, str):
+                    response.response += sources_text
+                
             return response
         except Exception as e:
             logger.error(f"Erreur lors de la génération de la réponse : {e}")
