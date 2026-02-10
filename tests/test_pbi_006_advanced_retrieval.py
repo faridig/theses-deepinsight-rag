@@ -28,7 +28,7 @@ class TestAdvancedRetrieval:
             # The first arg should be a list containing the base retriever
             assert mock_base_retriever in args[0]
             assert kwargs['num_queries'] == 3
-            assert kwargs['similarity_top_k'] == 20
+            assert kwargs['similarity_top_k'] == 10
             # mode is an enum
             assert "RECIPROCAL_RANK" in str(kwargs['mode'])
             assert kwargs['use_async'] is True
