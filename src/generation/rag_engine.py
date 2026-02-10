@@ -25,6 +25,9 @@ from typing import Optional
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Paramètres de récupération (PBI-014)
+RETRIEVAL_TOP_K = 10
+
 # Silence noisy libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("chromadb").setLevel(logging.WARNING)
@@ -119,7 +122,7 @@ class RAGEngine:
         )
 
         # 6. Assemblage du Retriever Fusionné (PBI-010 - Hybrid Search)
-        self.vector_retriever = self.index.as_retriever(similarity_top_k=20)
+        self.vector_retriever = self.index.as_retriever(similarity_top_k=RETRIEVAL_TOP_K)
         
         # Récupération des nodes pour BM25
         nodes = list(self.index.docstore.docs.values())
@@ -147,7 +150,7 @@ class RAGEngine:
         if nodes:
             self.bm25_retriever = BM25Retriever.from_defaults(
                 nodes=nodes,
-                similarity_top_k=20
+                similarity_top_k=RETRIEVAL_TOP_K
             )
             retrievers = [self.vector_retriever, self.bm25_retriever]
             logger.info("Recherche Hybride activée (Dense + Sparse).")
@@ -157,7 +160,7 @@ class RAGEngine:
 
         self.fusion_retriever = QueryFusionRetriever(
             retrievers,
-            similarity_top_k=20,
+            similarity_top_k=RETRIEVAL_TOP_K,
             num_queries=3,
             mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=True,
