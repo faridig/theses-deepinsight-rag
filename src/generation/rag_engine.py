@@ -100,13 +100,18 @@ class RAGEngine:
             try:
                 chroma_data = self.vector_service.chroma_collection.get()
                 nodes = []
-                for i in range(len(chroma_data['ids'])):
-                    nodes.append(TextNode(
-                        text=chroma_data['documents'][i],
-                        id_=chroma_data['ids'][i],
-                        metadata=chroma_data['metadatas'][i]
-                    ))
-                logger.info(f"{len(nodes)} nodes récupérés depuis Chroma.")
+                ids = chroma_data.get('ids', [])
+                documents = chroma_data.get('documents', [])
+                metadatas = chroma_data.get('metadatas', [])
+                
+                if ids and documents:
+                    for i in range(len(ids)):
+                        nodes.append(TextNode(
+                            text=documents[i],
+                            id_=ids[i],
+                            metadata=metadatas[i] if metadatas and i < len(metadatas) else {}
+                        ))
+                    logger.info(f"{len(nodes)} nodes récupérés depuis Chroma.")
             except Exception as e:
                 logger.error(f"Erreur lors de la récupération des nodes depuis Chroma : {e}")
                 nodes = []
