@@ -1,8 +1,6 @@
 
-import pytest
 from unittest.mock import MagicMock, patch
 from src.generation.rag_engine import RAGEngine, RETRIEVAL_TOP_K
-from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.llms.mock import MockLLM
 
 class TestRerankingOptimization:
