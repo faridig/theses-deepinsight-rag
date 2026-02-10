@@ -3,7 +3,7 @@ from typing import List, Optional
 import nest_asyncio
 import torch
 from llama_parse import LlamaParse
-from llama_index.core import StorageContext, Document, Settings
+from llama_index.core import StorageContext, Settings
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.node_parser import SentenceWindowNodeParser
