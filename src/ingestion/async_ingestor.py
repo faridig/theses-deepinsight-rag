@@ -1,6 +1,5 @@
-import os
 import logging
-from typing import List, Optional
+from typing import List
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import Document, BaseNode

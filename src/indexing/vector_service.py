@@ -2,7 +2,7 @@ import os
 import logging
 import json
 import asyncio
-from typing import Optional, Sequence, List
+from typing import Optional, Sequence
 from qdrant_client import QdrantClient, AsyncQdrantClient
 from qdrant_client.http import models as rest
 from llama_index.core import StorageContext, VectorStoreIndex, Settings

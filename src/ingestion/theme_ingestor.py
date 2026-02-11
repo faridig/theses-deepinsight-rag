@@ -1,7 +1,6 @@
 import logging
 import os
-from typing import List, Optional
-from llama_index.core import Document, SimpleDirectoryReader
+from llama_index.core import SimpleDirectoryReader
 from src.ingestion.theses_client import ThesesClient
 from src.ingestion.async_ingestor import AsyncIngestor
 from src.indexing.vector_service import VectorService
