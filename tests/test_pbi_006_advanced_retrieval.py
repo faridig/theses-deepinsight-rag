@@ -7,7 +7,7 @@ class TestAdvancedRetrieval:
     @patch('src.generation.rag_engine.VectorService')
     @patch('src.generation.rag_engine.OpenAI')
     @patch('src.generation.rag_engine.CohereRerank')
-    @patch('src.generation.rag_engine.QueryFusionRetriever')
+    @patch('src.generation.rag_engine.ParallelMultiQueryRetriever')
     @patch('src.generation.rag_engine.RetrieverQueryEngine')
     def test_advanced_retrieval_setup(self, mock_retriever_qe, mock_fusion, mock_cohere, mock_openai, mock_vector_service):
         # Setup environment variable for Cohere

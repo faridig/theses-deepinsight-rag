@@ -225,7 +225,7 @@ class RAGEngine:
             end_time = time.time()
             logger.info(f"Temps total aquery: {end_time - start_time:.2f}s")
             
-            if hasattr(response, "source_nodes") and response.source_nodes:
+            if not isinstance(response, str) and hasattr(response, "source_nodes") and response.source_nodes:
                 sources_text = "\n\nSources :"
                 unique_sources = set()
                 for node in response.source_nodes:
