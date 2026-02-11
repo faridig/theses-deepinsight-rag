@@ -1,9 +1,9 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Any
 import nest_asyncio
 import torch
 from llama_parse import LlamaParse
-from llama_index.core import StorageContext, Settings, Document
+from llama_index.core import StorageContext, Settings, Document, SimpleDirectoryReader
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.node_parser import SentenceWindowNodeParser
@@ -46,21 +46,84 @@ class ThesisParser:
                 original_text_metadata_key="original_text",
             )
 
-    def parse_pdf(self, file_path: str, is_dev: bool = False) -> List[BaseNode]:
+    def parse_pdf(self, file_path: str, is_dev: bool = False, fs: Optional[Any] = None) -> List[BaseNode]:
         """
         Parses a PDF file using the selected mode and returns a list of Nodes.
         
         Args:
-            file_path: Path to the PDF file.
-            is_dev: If True, limit parsing for development (only for LlamaParse).
+            file_path: Path to the PDF file (local or remote).
+            is_dev: If True, limit parsing for development.
+            fs: Optional fsspec-compatible filesystem.
             
         Returns:
             A list of Nodes.
         """
+        if fs:
+            return self._parse_with_fs(file_path, fs, is_dev=is_dev)
+            
         if self.mode == "docling":
             return self._parse_with_docling(file_path, is_dev=is_dev)
         else:
             return self._parse_with_llama_parse(file_path, is_dev=is_dev)
+
+    def _parse_with_fs(self, file_path: str, fs: Any, is_dev: bool = False) -> List[BaseNode]:
+        """
+        Parses a file from a remote filesystem using SimpleDirectoryReader.
+        """
+        if self.mode == "docling":
+            # Setup DoclingReader for SimpleDirectoryReader
+            device = AcceleratorDevice.CUDA if torch.cuda.is_available() else AcceleratorDevice.CPU
+            accelerator_options = AcceleratorOptions(device=device)
+            pipeline_options = PdfPipelineOptions()
+            pipeline_options.accelerator_options = accelerator_options
+            pipeline_options.do_ocr = True
+            
+            converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                }
+            )
+            
+            reader_instance = DoclingReader(
+                converter=converter,
+                export_type=DoclingReader.ExportType.JSON
+            )
+            
+            file_extractor = {".pdf": reader_instance}
+        else:
+            # LlamaParse doesn't easily plug into SimpleDirectoryReader with fs for single files
+            # without downloading it. For simplicity, if it's LlamaParse + fs, we download to temp.
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                with fs.open(file_path, "rb") as f:
+                    tmp.write(f.read())
+                tmp_path = tmp.name
+            
+            try:
+                nodes = self._parse_with_llama_parse(tmp_path, is_dev=is_dev)
+                # Cleanup
+                os.unlink(tmp_path)
+                return nodes
+            except Exception as e:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+                raise e
+
+        # Using SimpleDirectoryReader for Docling
+        loader = SimpleDirectoryReader(
+            input_files=[file_path],
+            fs=fs,
+            file_extractor=file_extractor if self.mode == "docling" else None
+        )
+        documents = loader.load_data()
+        
+        # Manually add file_name if missing
+        file_name = os.path.basename(file_path)
+        for doc in documents:
+            if "file_name" not in doc.metadata:
+                doc.metadata["file_name"] = file_name
+        
+        return self._create_nodes(documents)
 
     def _parse_with_llama_parse(self, file_path: str, is_dev: bool = False) -> List[BaseNode]:
         if not self.api_key:
