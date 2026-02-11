@@ -1,76 +1,69 @@
-# SPRINT PLAN N°10
+# SPRINT PLAN N°11
 
-**Sprint Goal** : Industrialiser l'infrastructure (Docker, MinIO, Qdrant) et optimiser la réactivité du système pour supporter un volume massif de thèses multi-domaines.
+**Sprint Goal** : Déployer une architecture multi-thèmes robuste permettant l'ingestion massive et isolée de thèses par domaine scientifique (IA, Agriculture, etc.).
 **Statut** : PLANNING
 
 ---
 
-## 🚀 PBI-019 : Optimisation Latence via Parallélisme (Async)
-**Priorité** : Haute | **Estimation** : S
+## 🏗️ PBI-023 : Architecture Multi-Collections (Isolation des Domaines)
+**Priorité** : Haute | **Estimation** : M
 
-**User Story** : "En tant que Lead-Dev, je veux paralléliser les appels au retriever afin de diviser la latence de récupération par 3."
+**User Story** : "En tant qu'utilisateur, je veux que mes recherches soient isolées par domaine afin d'éviter les interférences entre des sujets non liés."
 
 **Guide Technique (Lead-Dev)** :
-- Utiliser `asyncio.gather` pour exécuter simultanément les appels `aretrieve` dans le `MultiQueryRetriever`.
-- Remplacer les boucles séquentielles par une collection de tâches asynchrones.
+- Implémenter un `VectorService` capable de créer/gérer dynamiquement des collections Qdrant basées sur le "slug" du thème (ex: `theses-ia`, `theses-agri`).
+- Utiliser le `AsyncQdrantClient` pour les opérations de création de collection.
+- Mettre en place un sélecteur de collection dans le `RAGEngine` pour router la requête vers la bonne collection.
 - **Référence MCP context7** :
   ```python
-  import asyncio
-  tasks = [retriever.aretrieve(q) for q in generated_queries]
-  results = await asyncio.gather(*tasks)
+  from llama_index.vector_stores.qdrant import QdrantVectorStore
+  vector_store = QdrantVectorStore(collection_name=dynamic_theme_name, client=client, aclient=aclient)
   ```
 
 **Critères d'Acceptation (CA)** :
-- [ ] La latence totale pour 3 requêtes simultanées est < 3.5s.
-- [ ] Les traces Arize Phoenix montrent des barres de progression parallèles pour les retrievers.
+- [ ] Le système peut créer une nouvelle collection Qdrant à la volée lors de l'ingestion d'un nouveau thème.
+- [ ] Une recherche lancée sur le thème "IA" ne retourne aucun résultat provenant de la collection "Agriculture".
 
 ---
 
-## 🐳 PBI-020 : Infrastructure Cloud-Native (Docker Compose)
+## ⚡ PBI-024 : Async Ingestion Pipeline (Massive Loading)
 **Priorité** : Haute | **Estimation** : M
 
-**User Story** : "En tant que DevOps, je veux déployer MinIO et Qdrant via Docker pour garantir la portabilité, la gratuité et la performance."
+**User Story** : "En tant que Data Engineer, je veux traiter des centaines de thèses simultanément sans bloquer le système."
 
 **Guide Technique (Lead-Dev)** :
-- Créer un fichier `docker-compose.yml` incluant :
-  - **Qdrant** : Port 6333 (API) et 6334 (gRPC).
-  - **MinIO** : Port 9000 (API S3) et 9001 (Console).
-- Configurer les volumes persistants pour éviter toute perte de données.
-- Utiliser les images officielles `qdrant/qdrant` et `minio/minio`.
-
-**Critères d'Acceptation (CA)** :
-- [ ] `docker compose up -d` lance tous les services sans erreur.
-- [ ] La console MinIO est accessible sur `localhost:9001`.
-- [ ] L'API Qdrant répond sur `localhost:6333/dashboard`.
-
----
-
-## ☁️ PBI-021 : Abstraction Stockage S3 (MinIO)
-**Priorité** : Haute | **Estimation** : M
-
-**User Story** : "En tant que Lead-Dev, je veux migrer le stockage des PDFs du système de fichiers local vers l'API S3 pour permettre une migration Cloud transparente."
-
-**Guide Technique (Lead-Dev)** :
-- Installer `s3fs`.
-- Configurer `s3fs.S3FileSystem` avec l'endpoint local de MinIO (`http://localhost:9000`).
-- Refactorer le `ThesesClient` pour uploader les PDFs dans un bucket MinIO au lieu de `data/`.
-- Mettre à jour `SimpleDirectoryReader` pour lire depuis S3 via le paramètre `fs`.
+- Utiliser `llama_index.core.ingestion.IngestionPipeline` avec `vector_store` intégré.
+- Configurer les transformations (SentenceSplitter, etc.) et lancer le pipeline via `arun` pour un traitement asynchrone total.
+- Intégrer la gestion des erreurs pour ne pas stopper l'ingestion si un PDF est corrompu.
 - **Référence MCP context7** :
   ```python
-  import s3fs
-  fs = s3fs.S3FileSystem(endpoint_url="http://localhost:9000", key="minioadmin", secret="minioadmin")
-  documents = SimpleDirectoryReader(input_dir="bucket_name/ia", fs=fs).load_data()
+  pipeline = IngestionPipeline(transformations=[...], vector_store=vector_store)
+  nodes = await pipeline.arun(documents=documents, show_progress=True)
   ```
 
 **Critères d'Acceptation (CA)** :
-- [ ] Les nouveaux PDFs téléchargés apparaissent dans l'interface MinIO.
-- [ ] Le pipeline RAG charge les documents depuis MinIO sans erreur.
-- [ ] Aucune dépendance sur des chemins de fichiers locaux absolus.
+- [ ] Le traitement de 50 documents simultanés n'entraîne pas de timeout ou de crash mémoire.
+- [ ] Les traces Phoenix montrent l'exécution parallèle des étapes de parsing et d'embedding.
+
+---
+
+## 🌍 PBI-025 : Ingesteur Thématique Dynamique (Theses.fr)
+**Priorité** : Moyenne | **Estimation** : S
+
+**User Story** : "En tant que chercheur, je veux télécharger toutes les thèses d'une discipline spécifique via une simple commande."
+
+**Guide Technique (Lead-Dev)** :
+- Améliorer le `ThesesClient` pour supporter les filtres de recherche avancés de l'API (`discipline`, `sujet`).
+- Implémenter une logique de pagination pour récupérer plus de 100 résultats par thème.
+- S'assurer que chaque `Document` LlamaIndex porte les métadonnées du domaine (`theme`) pour le futur filtrage.
+
+**Critères d'Acceptation (CA)** :
+- [ ] Une commande `download_theme("intelligence artificielle", limit=100)` télécharge et indexe correctement les thèses correspondantes.
+- [ ] Les métadonnées `discipline` et `theme` sont correctement injectées dans chaque Node.
 
 ---
 
 ## 🏁 PASSAGE DE RELAIS
-1. L'infrastructure Docker est la priorité absolue pour permettre les autres développements.
-2. Le refactoring S3 doit être fait avec précaution pour ne pas casser l'ingestion actuelle.
+Ce sprint est crucial pour la scalabilité. Le Lead-Dev doit commencer par l'isolation des collections (PBI-023) avant de lancer l'ingestion massive (PBI-024).
 
 **PLANNING VALIDÉ. À TOI LEAD-DEV.**

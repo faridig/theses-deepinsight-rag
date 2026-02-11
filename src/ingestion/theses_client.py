@@ -34,35 +34,41 @@ class ThesesClient:
             os.makedirs(self.data_dir, exist_ok=True)
         self.headers = {"User-Agent": self.user_agent}
 
-    def search(self, query: str, rows: int = 10) -> List[Dict[str, Any]]:
-        """Searches for theses on theses.fr.
+    def search(self, query: str, rows: int = 10, start: int = 0, filters: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
+        """Searches for theses on theses.fr with pagination and filters (PBI-025).
 
         Args:
             query (str): The search keywords.
             rows (int): Number of results to return. Defaults to 10.
+            start (int): Starting index for pagination. Defaults to 0.
+            filters (Optional[Dict[str, str]]): Additional filters (e.g., {"discipline": "informatique"}).
 
         Returns:
             List[Dict[str, Any]]: A list of dictionaries containing thesis metadata.
         """
+        # Construction de la requête avec filtres
+        full_query = query
+        if filters:
+            for key, value in filters.items():
+                full_query += f' AND {key}:"{value}"'
+
         params = {
-            "q": query,
+            "q": full_query,
             "format": "json",
-            "rows": rows
+            "rows": rows,
+            "start": start
         }
         
         try:
-            # Added follow_redirects=True as per mission correction
             with httpx.Client(headers=self.headers, timeout=10.0, follow_redirects=True) as client:
                 response = client.get(self.base_url, params=params)
                 response.raise_for_status()
                 data = response.json()
                 
-                # Corrected root key: 'theses' instead of 'response/docs'
                 theses_list = data.get("theses", [])
                 results = []
                 for doc in theses_list:
                     thesis_id = doc.get("id")
-                    # Deduce PDF URL as it's missing from search JSON
                     url_document = f"https://theses.fr/{thesis_id}/document" if thesis_id else None
                     
                     results.append({
@@ -71,13 +77,34 @@ class ThesesClient:
                         "auteurs": [f"{a.get('prenom', '')} {a.get('nom', '')}".strip() for a in doc.get("auteurs", [])],
                         "dateSoutenance": doc.get("dateSoutenance"),
                         "discipline": doc.get("discipline"),
-                        "resume": None,  # Absent from search API, will be handled in later PBI or detailed fetch
+                        "resume": None,
                         "urlDocument": url_document
                     })
                 return results
         except httpx.HTTPError as e:
-            logger.error(f"Error during search for query '{query}': {e}")
+            logger.error(f"Error during search for query '{full_query}': {e}")
             return []
+
+    def search_all(self, query: str, limit: int = 100, filters: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
+        """Searches for all theses up to a limit using pagination (PBI-025)."""
+        all_results = []
+        rows_per_page = 100
+        start = 0
+        
+        while len(all_results) < limit:
+            rows_to_fetch = min(rows_per_page, limit - len(all_results))
+            page_results = self.search(query, rows=rows_to_fetch, start=start, filters=filters)
+            
+            if not page_results:
+                break
+                
+            all_results.extend(page_results)
+            start += rows_to_fetch
+            
+            if len(page_results) < rows_to_fetch:
+                break # No more results
+                
+        return all_results
 
     def download_pdf(self, thesis_id: str, download_url: str) -> Optional[str]:
         """Downloads a PDF document for a given thesis ID.

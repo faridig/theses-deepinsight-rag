@@ -31,9 +31,9 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-016** | **Migration Docling GPU** | Parsing local via GPU (CUDA). | DONE | HAUTE |
 | **PBI-017** | **Benchmark Qualitatif** | Comparaison Docling vs LlamaParse. | DONE | HAUTE |
 | **PBI-018** | **Adaptation Filtre Diversité** | Compatibilité Docling pour le filtre. | DONE | MOYENNE |
-| **PBI-019** | **Optimisation Latence (Async)** | Parallélisation via `asyncio.gather` pour Multi-Query. | EN ATTENTE | HAUTE |
-| **PBI-020** | **Docker-Compose Infra** | Setup MinIO & Qdrant en conteneurs (Gratuité & Portabilité). | EN ATTENTE | HAUTE |
-| **PBI-021** | **Abstraction S3 Storage** | Refactoring pour utiliser l'API S3 au lieu du FileSystem local. | EN ATTENTE | HAUTE |
+| **PBI-019** | **Optimisation Latence (Async)** | Parallélisation via `asyncio.gather` pour Multi-Query. | DONE | HAUTE |
+| **PBI-020** | **Docker-Compose Infra** | Setup MinIO & Qdrant en conteneurs (Gratuité & Portabilité). | DONE | HAUTE |
+| **PBI-021** | **Abstraction S3 Storage** | Refactoring pour utiliser l'API S3 au lieu du FileSystem local. | DONE | HAUTE |
 | **PBI-022** | **Migration Qdrant Production** | Bascule de ChromaDB vers Qdrant (gRPC, performance, Cloud-Ready). | EN ATTENTE | MOYENNE |
 | **PBI-023** | **Architecture Multi-Collections** | Gestionnaire de thèmes (Namespacing) pour l'isolation des données. | EN ATTENTE | HAUTE |
 | **PBI-024** | **Async Ingestion Pipeline** | Ingestion massive multi-threadée/asynchrone avec `IngestionPipeline`. | EN ATTENTE | MOYENNE |
