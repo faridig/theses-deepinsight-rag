@@ -33,7 +33,7 @@ async def test_multi_collection_isolation(tmp_path, mock_settings):
     vs_agri.close()
     
     # 3. Test de recherche isolée via RAGEngine
-    engine = RAGEngine(storage_path=storage_path, default_collection="theses-ia")
+    engine = RAGEngine(storage_path=storage_path, collection_name="theses-ia")
     
     try:
         # Recherche sur l'IA (doit trouver le node IA)

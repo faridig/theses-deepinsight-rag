@@ -2,7 +2,7 @@ import os
 import logging
 import asyncio
 import time
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
 
 from llama_index.core import (
@@ -73,8 +73,6 @@ class NodeCleaningProcessor(BaseNodePostprocessor):
             node.excluded_llm_metadata_keys = current_excluded
             node.metadata_template = "{key} : {value}"
             
-            # Correction LSP: text_template n'est pas sur BaseNode mais on peut l'injecter 
-            # ou s'assurer que c'est un TextNode
             if isinstance(node, TextNode):
                 node.text_template = "THÈSE INFO :\n{metadata_str}\nEXTRAIT :\n{content}\n"
             
@@ -106,14 +104,16 @@ class RAGEngine:
     """
     Moteur RAG multi-collections pour l'isolation des thèses par domaine (PBI-023).
     """
-    def __init__(self, storage_path: str = "./storage/qdrant", default_collection: str = "theses-default"):
+    def __init__(self, storage_path: str = "./storage/qdrant", collection_name: str = "theses-default"):
         # 1. Configuration globale
         Settings.llm = OpenAI(model="gpt-4o-mini")
         Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
         
         self.storage_path = storage_path
-        self.default_collection = default_collection
+        self.default_collection = collection_name
         self._query_engines: Dict[str, RetrieverQueryEngine] = {}
+        self._shared_vector_service: Optional[VectorService] = None
+        self.index_ref = None 
         
         # 2. Pipeline de Post-Processing commun
         self.post_processors: List[BaseNodePostprocessor] = [
@@ -142,6 +142,34 @@ class RAGEngine:
             "RÉPONSE : "
         )
 
+    @property
+    def index(self):
+        """Compatibilité descendante pour l'accès à l'index."""
+        if not self.index_ref:
+            # On initialise la collection par défaut si nécessaire
+            self._get_query_engine(self.default_collection)
+        return self.index_ref
+
+    def _get_vector_service(self, collection_name: str) -> VectorService:
+        """
+        Gère le partage du client Qdrant pour éviter les verrous de fichiers (PBI-023).
+        """
+        if self._shared_vector_service is None:
+            self._shared_vector_service = VectorService(
+                storage_path=self.storage_path, 
+                collection_name=collection_name
+            )
+            return self._shared_vector_service
+        
+        # Si on change de collection mais qu'on garde le même storage_path (client)
+        # on crée une nouvelle instance de VectorService partageant le même client
+        return VectorService(
+            storage_path=self.storage_path,
+            collection_name=collection_name,
+            client=self._shared_vector_service.client,
+            aclient=self._shared_vector_service.aclient
+        )
+
     def _get_query_engine(self, collection_name: str) -> RetrieverQueryEngine:
         """
         Récupère ou crée un QueryEngine pour une collection spécifique (Routing PBI-023).
@@ -151,8 +179,9 @@ class RAGEngine:
         
         logger.info(f"Initialisation du QueryEngine pour la collection : {collection_name}")
         
-        vector_service = VectorService(storage_path=self.storage_path, collection_name=collection_name)
+        vector_service = self._get_vector_service(collection_name)
         index = vector_service.index
+        self.index_ref = index
         
         # Vector Retriever
         vector_retriever = index.as_retriever(similarity_top_k=RETRIEVAL_TOP_K)
@@ -178,9 +207,13 @@ class RAGEngine:
             similarity_top_k=RETRIEVAL_TOP_K,
             num_queries=3,
             mode=FUSION_MODES.RECIPROCAL_RANK,
-            use_async=vector_service.aclient is not None,
+            use_async=vector_service.aclient is not None and not isinstance(vector_service.aclient, (str, type(None))),
             verbose=False
         )
+        
+        # Hack pour le wrapper AsyncQdrantLocalWrapper (qui n'est pas une instance d'AsyncQdrantClient)
+        if hasattr(vector_service.aclient, "_client"):
+            fusion_retriever.use_async = False # On force sync pour le wrapper local
 
         # Query Engine
         all_post_processors = [
@@ -220,8 +253,6 @@ class RAGEngine:
             query_engine = self._get_query_engine(collection_name)
             start_time = time.time()
             
-            # Si le retriever ne supporte pas l'async (ex: mode local sans aclient)
-            # on bascule sur la version sync pour éviter l'erreur "Async client is not initialized"
             use_async = getattr(query_engine.retriever, "use_async", False)
             if use_async:
                 response = await query_engine.aquery(question)
@@ -231,7 +262,6 @@ class RAGEngine:
             end_time = time.time()
             logger.info(f"Temps total aquery ({collection_name}): {end_time - start_time:.2f}s")
             
-            # Enrichissement de la réponse avec les sources
             if isinstance(response, Response) and response.source_nodes:
                 sources_text = "\n\nSources :"
                 unique_sources = set()

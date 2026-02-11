@@ -2,7 +2,7 @@ import os
 import logging
 import json
 import asyncio
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Any
 from qdrant_client import QdrantClient, AsyncQdrantClient
 from qdrant_client.http import models as rest
 from llama_index.core import StorageContext, VectorStoreIndex, Settings
@@ -17,7 +17,7 @@ class VectorService:
     Service for managing vector indexing and retrieval using Qdrant and LlamaIndex.
     Optimisé pour l'isolation des domaines (PBI-023).
     """
-    def __init__(self, storage_path: str = "./storage/qdrant", collection_name: str = "theses-default"):
+    def __init__(self, storage_path: str = "./storage/qdrant", collection_name: str = "theses-default", client: Optional[QdrantClient] = None, aclient: Optional[Any] = None):
         # Configuration de l'embedding model par défaut
         try:
             from llama_index.core.embeddings import MockEmbedding
@@ -32,20 +32,24 @@ class VectorService:
         self.collection_name = collection_name
         
         # Initialisation des clients Qdrant
-        qdrant_url = os.getenv("QDRANT_URL")
-        if qdrant_url:
-            logger.info(f"Utilisation du serveur Qdrant à {qdrant_url}")
-            self.client = QdrantClient(url=qdrant_url)
-            self.aclient = AsyncQdrantClient(url=qdrant_url)
-        elif self.storage_path == ":memory:":
-            logger.info("Utilisation de Qdrant en mémoire")
-            self.client = QdrantClient(":memory:")
-            self.aclient = None # L'async est désactivé en local pour éviter les verrous
+        if client:
+            self.client = client
+            self.aclient = aclient
         else:
-            logger.info(f"Utilisation du stockage local Qdrant : {self.storage_path}")
-            os.makedirs(self.storage_path, exist_ok=True)
-            self.client = QdrantClient(path=self.storage_path)
-            self.aclient = None 
+            qdrant_url = os.getenv("QDRANT_URL")
+            if qdrant_url:
+                logger.info(f"Utilisation du serveur Qdrant à {qdrant_url}")
+                self.client = QdrantClient(url=qdrant_url)
+                self.aclient = AsyncQdrantClient(url=qdrant_url)
+            elif self.storage_path == ":memory:":
+                logger.info("Utilisation de Qdrant en mémoire")
+                self.client = QdrantClient(":memory:")
+                self.aclient = None # L'async est désactivé en local pour éviter les verrous
+            else:
+                logger.info(f"Utilisation du stockage local Qdrant : {self.storage_path}")
+                os.makedirs(self.storage_path, exist_ok=True)
+                self.client = QdrantClient(path=self.storage_path)
+                self.aclient = None 
         
         # Initialisation du Vector Store Qdrant
         self.vector_store = QdrantVectorStore(
