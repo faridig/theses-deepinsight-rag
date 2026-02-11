@@ -226,8 +226,8 @@ rich==14.3.1
 rpds-py==0.30.0
 rtree==1.4.1
 ruff==0.14.14
-s3fs
-boto3
+s3fs==2025.10.0
+boto3==1.41.5
 safetensors==0.7.0
 scikit-learn==1.8.0
 scikit-network==0.33.5
