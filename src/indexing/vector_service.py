@@ -68,6 +68,26 @@ class VectorService:
             
         return self._index
 
+    def get_all_nodes(self) -> Sequence[BaseNode]:
+        """
+        Récupère tous les nœuds de la collection Chroma.
+        """
+        from llama_index.core.schema import TextNode
+        chroma_data = self.chroma_collection.get()
+        nodes = []
+        ids = chroma_data.get('ids', [])
+        documents = chroma_data.get('documents', [])
+        metadatas = chroma_data.get('metadatas', [])
+        
+        if ids and documents:
+            for i in range(len(ids)):
+                nodes.append(TextNode(
+                    text=documents[i],
+                    id_=ids[i],
+                    metadata=metadatas[i] if metadatas and i < len(metadatas) else {}
+                ))
+        return nodes
+
     def get_retriever(self, similarity_top_k: int = 5):
         """
         Returns a retriever for the current index.

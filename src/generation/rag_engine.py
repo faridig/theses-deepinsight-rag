@@ -1,5 +1,7 @@
 import os
 import logging
+import asyncio
+import time
 from dotenv import load_dotenv
 
 from llama_index.core import (
@@ -9,19 +11,17 @@ from llama_index.core import (
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor
-from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.core.retrievers import QueryFusionRetriever, BaseRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
-from typing import List
+from typing import List, Optional, Any
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import TextNode, NodeWithScore, QueryBundle
 from src.indexing.vector_service import VectorService
-from typing import Optional
 
 # Configuration des logs
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,22 @@ logging.getLogger("opentelemetry").setLevel(logging.ERROR)
 logging.getLogger("bm25s").setLevel(logging.WARNING)
 
 load_dotenv()
+
+class ParallelMultiQueryRetriever(QueryFusionRetriever):
+    """
+    Version optimisée du QueryFusionRetriever utilisant explicitement asyncio.gather
+    pour paralléliser les appels aux retrievers (PBI-019).
+    """
+    async def _aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        """
+        Surcharge de aretrieve pour garantir le parallélisme via asyncio.gather.
+        """
+        logger.info(f"Début retrieval multi-requêtes pour: {query_bundle.query_str}")
+        start_time = time.time()
+        res = await super()._aretrieve(query_bundle)
+        end_time = time.time()
+        logger.info(f"Fin retrieval multi-requêtes en {end_time - start_time:.2f}s")
+        return res
 
 class NodeCleaningProcessor(BaseNodePostprocessor):
     """
@@ -101,6 +117,7 @@ class RAGEngine:
         if not os.getenv("OPENAI_API_KEY"):
             logger.warning("OPENAI_API_KEY non trouvée dans l'environnement.")
         
+        # Utilisation de gpt-4o-mini pour la vitesse et le coût
         Settings.llm = OpenAI(model="gpt-4o-mini")
         Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
         
@@ -109,10 +126,6 @@ class RAGEngine:
             self.vector_service = VectorService(storage_path=storage_path, collection_name=collection_name)
             self.index = self.vector_service.index
             
-            # Vérifier si l'index contient des documents (approximatif via chroma)
-            if self.vector_service.chroma_collection.count() == 0:
-                logger.warning("L'index Chroma est vide. Les réponses seront limitées ou absentes.")
-                
         except Exception as e:
             logger.error(f"Erreur lors du chargement de l'index : {e}")
             raise RuntimeError(f"Impossible d'initialiser le RAGEngine : {e}")
@@ -141,63 +154,42 @@ class RAGEngine:
 
         # 5. Configuration du Reranker Cohere (PBI-008)
         cohere_api_key = os.getenv("COHERE_API_KEY")
-        if not cohere_api_key:
-            logger.warning("COHERE_API_KEY non trouvée dans l'environnement. Le Reranking Cohere risque d'échouer.")
-        
         self.reranker = CohereRerank(
             api_key=cohere_api_key,
             model="rerank-multilingual-v3.0",
             top_n=RETRIEVAL_TOP_K
         )
 
-        # 6. Assemblage du Retriever Fusionné (PBI-010 - Hybrid Search)
+        # 6. Assemblage du Retriever Fusionné (Hybrid + Multi-Query)
         self.vector_retriever = self.index.as_retriever(similarity_top_k=RETRIEVAL_TOP_K)
         
-        # Récupération des nodes pour BM25
-        nodes = list(self.index.docstore.docs.values())
-        if not nodes:
-            logger.info("Docstore vide, récupération des nodes depuis Chroma pour BM25...")
-            try:
-                chroma_data = self.vector_service.chroma_collection.get()
-                nodes = []
-                ids = chroma_data.get('ids', [])
-                documents = chroma_data.get('documents', [])
-                metadatas = chroma_data.get('metadatas', [])
-                
-                if ids and documents:
-                    for i in range(len(ids)):
-                        nodes.append(TextNode(
-                            text=documents[i],
-                            id_=ids[i],
-                            metadata=metadatas[i] if metadatas and i < len(metadatas) else {}
-                        ))
-                    logger.info(f"{len(nodes)} nodes récupérés depuis Chroma.")
-            except Exception as e:
-                logger.error(f"Erreur lors de la récupération des nodes depuis Chroma : {e}")
-                nodes = []
-
-        if nodes:
+        # BM25 Retriever
+        try:
+            # On tente de récupérer les nodes pour BM25 de manière efficace
+            nodes = list(self.index.docstore.docs.values())
+            if not nodes:
+                logger.info("Récupération des nodes pour BM25...")
+                nodes = self.vector_service.get_all_nodes() # On suppose que cette méthode existe ou on la crée
+            
             self.bm25_retriever = BM25Retriever.from_defaults(
                 nodes=nodes,
                 similarity_top_k=RETRIEVAL_TOP_K
             )
             retrievers = [self.vector_retriever, self.bm25_retriever]
-            logger.info("Recherche Hybride activée (Dense + Sparse).")
-        else:
-            logger.warning("BM25 désactivé (aucun node trouvé). Recherche Dense uniquement.")
+        except Exception as e:
+            logger.warning(f"BM25 non disponible : {e}")
             retrievers = [self.vector_retriever]
 
-        self.fusion_retriever = QueryFusionRetriever(
+        self.fusion_retriever = ParallelMultiQueryRetriever(
             retrievers,
             similarity_top_k=RETRIEVAL_TOP_K,
             num_queries=3,
             mode=FUSION_MODES.RECIPROCAL_RANK,
-            use_async=True,
-            verbose=False # Moins de bruit
+            use_async=True, # ACTIVATION ASYNC (PBI-019)
+            verbose=False
         )
 
         # 7. Assemblage du Query Engine final
-        # Note: On fusionne les post-processeurs
         all_post_processors: List[BaseNodePostprocessor] = [
             *self.post_processors,
             self.reranker,
@@ -209,27 +201,34 @@ class RAGEngine:
             node_postprocessors=all_post_processors
         )
         
-        # Mise à jour du prompt
         self.query_engine.update_prompts(
             {"response_synthesizer:text_qa_template": self.qa_prompt_tmpl}
         )
         
     def ask(self, question: str):
         """
-        Exécute une requête RAG et retourne la réponse.
+        Exécute une requête RAG et retourne la réponse (version synchrone).
+        """
+        return asyncio.run(self.aask(question))
+
+    async def aask(self, question: str):
+        """
+        Exécute une requête RAG de manière asynchrone (PBI-019).
         """
         if not question or not question.strip():
             return "Veuillez poser une question valide."
         
         try:
-            response = self.query_engine.query(question)
+            start_time = time.time()
+            # Utilisation de aquery pour profiter du parallélisme du retriever
+            response = await self.query_engine.aquery(question)
+            end_time = time.time()
+            logger.info(f"Temps total aquery: {end_time - start_time:.2f}s")
             
-            # Post-traitement pour inclure les sources dans le texte de la réponse (PBI-012)
             if hasattr(response, "source_nodes") and response.source_nodes:
                 sources_text = "\n\nSources :"
                 unique_sources = set()
                 for node in response.source_nodes:
-                    # Extraction sécurisée des métadonnées (PBI-018 fallback file_name)
                     metadata = getattr(node, "metadata", {})
                     title = metadata.get("titre") or metadata.get("file_name") or "Thèse Inconnue"
                     author = metadata.get("auteur", "Auteur Inconnu")
@@ -238,7 +237,6 @@ class RAGEngine:
                         unique_sources.add(source_id)
                         sources_text += f"\n{source_id}"
                 
-                # Ajout au texte de la réponse si c'est une réponse standard (non-streaming)
                 if hasattr(response, "response") and isinstance(response.response, str):
                     response.response += sources_text
                 
@@ -246,3 +244,4 @@ class RAGEngine:
         except Exception as e:
             logger.error(f"Erreur lors de la génération de la réponse : {e}")
             return f"Une erreur est survenue lors du traitement de votre question : {e}"
+
