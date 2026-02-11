@@ -2,7 +2,7 @@ import os
 import logging
 import asyncio
 import time
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 from dotenv import load_dotenv
 
 from llama_index.core import (
