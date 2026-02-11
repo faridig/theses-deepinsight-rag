@@ -52,8 +52,14 @@ class NodeCleaningProcessor(BaseNodePostprocessor):
         
         for node_with_score in nodes:
             node = node_with_score.node
+            
+            # Adaptation PBI-018 : Si pas de titre, on permet au LLM de voir le file_name pour la citation
+            current_excluded = list(excluded_keys)
+            if "titre" not in node.metadata and "file_name" in current_excluded:
+                current_excluded.remove("file_name")
+            
             # 1. Exclusion des clés techniques
-            node.excluded_llm_metadata_keys = excluded_keys
+            node.excluded_llm_metadata_keys = current_excluded
             # 2. Simplification du formatage du texte (via templates LlamaIndex)
             node.metadata_template = "{key} : {value}"
             node.text_template = "THÈSE INFO :\n{metadata_str}\nEXTRAIT :\n{content}\n"
@@ -72,8 +78,10 @@ class DiversityPostprocessor(BaseNodePostprocessor):
     def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
         unique_docs = {}
         for node_with_score in nodes:
-            # On utilise le titre comme identifiant de thèse
-            doc_id = node_with_score.node.metadata.get("titre", node_with_score.node.node_id)
+            # On utilise le titre ou le file_name comme identifiant de thèse (PBI-018 Adaptation Docling)
+            doc_id = node_with_score.node.metadata.get("titre") or \
+                     node_with_score.node.metadata.get("file_name") or \
+                     node_with_score.node.node_id
             
             if doc_id not in unique_docs:
                 unique_docs[doc_id] = node_with_score
@@ -221,9 +229,9 @@ class RAGEngine:
                 sources_text = "\n\nSources :"
                 unique_sources = set()
                 for node in response.source_nodes:
-                    # Extraction sécurisée des métadonnées
+                    # Extraction sécurisée des métadonnées (PBI-018 fallback file_name)
                     metadata = getattr(node, "metadata", {})
-                    title = metadata.get("titre", "Thèse Inconnue")
+                    title = metadata.get("titre") or metadata.get("file_name") or "Thèse Inconnue"
                     author = metadata.get("auteur", "Auteur Inconnu")
                     source_id = f"- {title} ({author})"
                     if source_id not in unique_sources:
