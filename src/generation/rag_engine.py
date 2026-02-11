@@ -11,14 +11,14 @@ from llama_index.core import (
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor
-from llama_index.core.retrievers import QueryFusionRetriever, BaseRetriever
+from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
-from typing import List, Optional, Any
+from typing import List, Optional
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
-from llama_index.core.schema import TextNode, NodeWithScore, QueryBundle
+from llama_index.core.schema import NodeWithScore, QueryBundle
 from src.indexing.vector_service import VectorService
 
 # Configuration des logs

@@ -1,7 +1,6 @@
 import unittest
 from src.ingestion.theses_client import ThesesClient
 import s3fs
-import os
 
 class TestThesesClientS3(unittest.TestCase):
     def setUp(self):

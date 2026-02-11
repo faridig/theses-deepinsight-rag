@@ -1,4 +1,3 @@
-import os
 import logging
 from src.ingestion.theses_client import ThesesClient
 from src.processing.parser import ThesisParser

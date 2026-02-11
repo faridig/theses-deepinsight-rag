@@ -20,7 +20,7 @@ class TestLatency(unittest.IsolatedAsyncioTestCase):
         start_time = time.time()
         # On lance 3 requêtes simultanées pour vérifier le parallélisme global
         tasks = [self.engine.aask(question) for _ in range(3)]
-        results = await asyncio.gather(*tasks)
+        await asyncio.gather(*tasks)
         end_time = time.time()
         
         duration = end_time - start_time
