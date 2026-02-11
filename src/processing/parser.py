@@ -3,7 +3,7 @@ from typing import List, Optional
 import nest_asyncio
 import torch
 from llama_parse import LlamaParse
-from llama_index.core import StorageContext, Settings
+from llama_index.core import StorageContext, Settings, Document
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.node_parser import SentenceWindowNodeParser
@@ -82,7 +82,39 @@ class ThesisParser:
             
         parser = LlamaParse(**parser_args)
         documents = parser.load_data(file_path)
-        return self.node_parser.get_nodes_from_documents(documents)
+        return self._create_nodes(documents)
+
+    def _create_nodes(self, documents: List[Document]) -> List[BaseNode]:
+        """
+        Transforms documents into Nodes using the appropriate parser for the current mode.
+        """
+        if self.mode == "docling":
+            nodes = self.docling_node_parser.get_nodes_from_documents(documents)
+            
+            # Post-process nodes for Docling mode (metadata cleaning for Chroma)
+            for node in nodes:
+                if "page_label" not in node.metadata and "page_no" in node.metadata:
+                    node.metadata["page_label"] = str(node.metadata["page_no"])
+                
+                # Ensure file_name is propagated if available in documents
+                # Normally llama-index does this, but we keep it for safety
+                
+                # Clean up metadata for Chroma (must be flat and simple types)
+                keys_to_clean = []
+                for k, v in node.metadata.items():
+                    if isinstance(v, (list, dict)):
+                        keys_to_clean.append(k)
+                
+                for k in keys_to_clean:
+                    if k == "headings" and isinstance(node.metadata[k], list):
+                        node.metadata[k] = " > ".join([str(h) for h in node.metadata[k]])
+                    elif k == "doc_items":
+                        del node.metadata[k]
+                    else:
+                        node.metadata[k] = str(node.metadata[k])
+            return nodes
+        else:
+            return self.node_parser.get_nodes_from_documents(documents)
 
     def _parse_with_docling(self, file_path: str, is_dev: bool = False) -> List[BaseNode]:
         """
@@ -118,37 +150,7 @@ class ThesisParser:
             doc.metadata["file_name"] = file_name
         
         # Transform to nodes
-        nodes = self.docling_node_parser.get_nodes_from_documents(documents)
-        
-        # Ensure page_label is populated if missing but page_no is present
-        # and flatten/clean metadata for Chroma compatibility
-        for node in nodes:
-            if "page_label" not in node.metadata and "page_no" in node.metadata:
-                node.metadata["page_label"] = str(node.metadata["page_no"])
-            # Ensure file_name is in node metadata too
-            if "file_name" not in node.metadata:
-                node.metadata["file_name"] = file_name
-            
-            # Clean up metadata for Chroma (must be flat and simple types)
-            # We convert lists/dicts to strings or remove them
-            keys_to_clean = []
-            for k, v in node.metadata.items():
-                if isinstance(v, (list, dict)):
-                    keys_to_clean.append(k)
-            
-            for k in keys_to_clean:
-                # For docling specifically, doc_items is a large list of refs, we can drop it
-                # For headings, we can join them
-                if k == "headings" and isinstance(node.metadata[k], list):
-                    node.metadata[k] = " > ".join([str(h) for h in node.metadata[k]])
-                elif k == "doc_items":
-                    # Dropping doc_items as it's too complex and large for Chroma metadata
-                    del node.metadata[k]
-                else:
-                    # Convert others to string
-                    node.metadata[k] = str(node.metadata[k])
-
-        return nodes
+        return self._create_nodes(documents)
 
     def save_nodes(self, nodes: List[BaseNode], storage_dir: str = "storage"):
         """
