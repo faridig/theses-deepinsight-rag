@@ -51,19 +51,28 @@ class TestDiversityDocling:
         processor = DiversityPostprocessor(target_top_n=2)
         filtered_nodes = processor._postprocess_nodes(nodes)
         
-        # Actuellement, il va probablement en renvoyer 2 car:
-        # node1 -> doc_id = "Thèse A"
-        # node2 -> doc_id = "a.pdf" (car pas de titre)
-        # S'ils sont différents, c'est OK. 
-        # Mais si c'est le même doc, c'est dommage.
-        # Toutefois, le critère d'acceptation dit: "identifie correctement les file_name pour éviter le monopole".
-        
-        pass 
+        # Actuellement, il en renvoie 2 car "Thèse A" != "a.pdf"
+        # C'est le comportement attendu pour l'instant pour éviter les faux positifs de déduplication
+        assert len(filtered_nodes) == 2
 
     def test_node_cleaning_preserves_file_name_if_no_titre(self):
         """
         Vérifie que NodeCleaningProcessor permet au LLM de voir file_name si titre absent.
-        Note: On ne peut pas facilement tester excluded_llm_metadata_keys ici sans simuler LlamaIndex,
-        mais on peut vérifier la logique si on l'implémente.
         """
-        pass
+        from src.generation.rag_engine import NodeCleaningProcessor
+        
+        node_no_title = TextNode(text="Content", metadata={"file_name": "test.pdf"})
+        node_with_title = TextNode(text="Content", metadata={"titre": "Title", "file_name": "test.pdf"})
+        
+        nodes = [
+            NodeWithScore(node=node_no_title, score=1.0),
+            NodeWithScore(node=node_with_title, score=1.0)
+        ]
+        
+        processor = NodeCleaningProcessor()
+        processed_nodes = processor._postprocess_nodes(nodes)
+        
+        # Node sans titre : file_name ne doit pas être dans excluded_llm_metadata_keys
+        assert "file_name" not in processed_nodes[0].node.excluded_llm_metadata_keys
+        # Node avec titre : file_name doit être dans excluded_llm_metadata_keys
+        assert "file_name" in processed_nodes[1].node.excluded_llm_metadata_keys
