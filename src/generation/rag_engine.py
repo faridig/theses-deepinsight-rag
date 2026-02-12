@@ -150,6 +150,16 @@ class RAGEngine:
             self._get_query_engine(self.default_collection)
         return self.index_ref
 
+    @property
+    def fusion_retriever(self):
+        """Compatibilité pour les tests (PBI-010)."""
+        return self._get_query_engine(self.default_collection).retriever
+
+    @property
+    def retriever(self):
+        """Alias pour fusion_retriever."""
+        return self.fusion_retriever
+
     def _get_vector_service(self, collection_name: str) -> VectorService:
         """
         Gère le partage du client Qdrant pour éviter les verrous de fichiers (PBI-023).
@@ -280,4 +290,7 @@ class RAGEngine:
             return response
         except Exception as e:
             logger.error(f"Erreur lors de la génération de la réponse pour {collection_name} : {e}")
-            return f"Une erreur est survenue lors du traitement de votre question : {e}"
+            return Response(
+                response=f"Une erreur est survenue lors du traitement de votre question : {e}", 
+                source_nodes=[]
+            )

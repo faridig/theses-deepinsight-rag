@@ -20,7 +20,8 @@ class TestAdvancedRetrieval:
             mock_index.as_retriever.return_value = mock_base_retriever
             
             # Initialize engine
-            _ = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")
+            engine = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")
+            _ = engine.index # Déclenche l'initialisation
             
             # Assertions for QueryFusionRetriever
             mock_fusion.assert_called_once()
