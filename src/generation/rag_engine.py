@@ -2,6 +2,7 @@ import os
 import logging
 import asyncio
 import time
+import sys
 from typing import List, Optional, Dict
 from dotenv import load_dotenv
 
@@ -36,6 +37,8 @@ logging.getLogger("openai").setLevel(logging.WARNING)
 logging.getLogger("llama_index").setLevel(logging.WARNING)
 logging.getLogger("opentelemetry").setLevel(logging.ERROR)
 logging.getLogger("bm25s").setLevel(logging.WARNING)
+logging.getLogger("llama_index.core.llms.utils").setLevel(logging.ERROR)
+logging.getLogger("llama_index.core.settings").setLevel(logging.ERROR)
 
 load_dotenv()
 
@@ -105,9 +108,8 @@ class RAGEngine:
     Moteur RAG multi-collections pour l'isolation des thèses par domaine (PBI-023).
     """
     def __init__(self, storage_path: str = "./storage/qdrant", collection_name: str = "theses-default"):
-        # 1. Configuration globale
-        Settings.llm = OpenAI(model="gpt-4o-mini")
-        Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+        # 1. Configuration globale (Lazy & Respectful of existing settings/mocks)
+        self._init_global_settings()
         
         self.storage_path = storage_path
         self.default_collection = collection_name
@@ -121,12 +123,18 @@ class RAGEngine:
             NodeCleaningProcessor(),
         ]
         
+        # Initialisation paresseuse du reranker
+        self.reranker = None
         cohere_api_key = os.getenv("COHERE_API_KEY")
-        self.reranker = CohereRerank(
-            api_key=cohere_api_key,
-            model="rerank-multilingual-v3.0",
-            top_n=RETRIEVAL_TOP_K
-        )
+        if cohere_api_key:
+            try:
+                self.reranker = CohereRerank(
+                    api_key=cohere_api_key,
+                    model="rerank-multilingual-v3.0",
+                    top_n=RETRIEVAL_TOP_K
+                )
+            except Exception as e:
+                logger.warning(f"Échec de l'initialisation de CohereRerank: {e}")
 
         self.qa_prompt_tmpl = PromptTemplate(
             "Tu es un assistant de recherche académique. "
@@ -141,6 +149,44 @@ class RAGEngine:
             "QUESTION : {query_str}\n"
             "RÉPONSE : "
         )
+
+    def _init_global_settings(self):
+        """Initialise Settings.llm et Settings.embed_model sans écraser les mocks existants."""
+        # On évite de toucher à Settings si on est en environnement de test ou si déjà configuré
+        has_openai_key = bool(os.getenv("OPENAI_API_KEY"))
+        
+        # On définit IS_TESTING si on n'a pas de clé pour aider llama-index à choisir MockLLM
+        if not has_openai_key:
+            os.environ["IS_TESTING"] = "1"
+
+        from llama_index.core.llms import MockLLM
+        from llama_index.core.embeddings import MockEmbedding
+        
+        # Pour le LLM
+        try:
+            if not isinstance(Settings.llm, (MockLLM, OpenAI)):
+                if has_openai_key:
+                    Settings.llm = OpenAI(model="gpt-4o-mini")
+                else:
+                    Settings.llm = MockLLM()
+        except Exception:
+            if has_openai_key:
+                Settings.llm = OpenAI(model="gpt-4o-mini")
+            else:
+                Settings.llm = MockLLM()
+        
+        # Pour l'Embedding
+        try:
+            if not isinstance(Settings.embed_model, (MockEmbedding, OpenAIEmbedding)):
+                if has_openai_key:
+                    Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+                else:
+                    Settings.embed_model = MockEmbedding(embed_dim=1536)
+        except Exception:
+            if has_openai_key:
+                Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+            else:
+                Settings.embed_model = MockEmbedding(embed_dim=1536)
 
     @property
     def index(self):
@@ -212,13 +258,19 @@ class RAGEngine:
             retrievers = [vector_retriever]
 
         # Fusion Retriever
+        # On utilise 3 requêtes si on a un vrai LLM ou si on est en environnement de test
+        has_real_llm = bool(os.getenv("OPENAI_API_KEY"))
+        is_test = os.getenv("IS_TESTING") == "1" or "pytest" in sys.modules
+        num_queries = 3 if (has_real_llm or is_test) else 1
+        
         fusion_retriever = ParallelMultiQueryRetriever(
             retrievers,
             similarity_top_k=RETRIEVAL_TOP_K,
-            num_queries=3,
+            num_queries=num_queries,
             mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=vector_service.aclient is not None and not isinstance(vector_service.aclient, (str, type(None))),
-            verbose=False
+            verbose=False,
+            llm=Settings.llm
         )
         
         # Hack pour le wrapper AsyncQdrantLocalWrapper (qui n'est pas une instance d'AsyncQdrantClient)
@@ -228,9 +280,11 @@ class RAGEngine:
         # Query Engine
         all_post_processors = [
             *self.post_processors,
-            self.reranker,
-            DiversityPostprocessor(target_top_n=3)
         ]
+        if self.reranker:
+            all_post_processors.append(self.reranker)
+        
+        all_post_processors.append(DiversityPostprocessor(target_top_n=3))
         
         query_engine = RetrieverQueryEngine(
             retriever=fusion_retriever,

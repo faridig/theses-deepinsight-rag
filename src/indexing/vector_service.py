@@ -18,16 +18,6 @@ class VectorService:
     Optimisé pour l'isolation des domaines (PBI-023).
     """
     def __init__(self, storage_path: str = "./storage/qdrant", collection_name: str = "theses-default", client: Optional[QdrantClient] = None, aclient: Optional[Any] = None):
-        # Configuration de l'embedding model par défaut
-        try:
-            from llama_index.core.embeddings import MockEmbedding
-            is_mock = isinstance(Settings.embed_model, MockEmbedding)
-        except ImportError:
-            is_mock = False
-
-        if not is_mock:
-            Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
-        
         self.storage_path = storage_path
         self.collection_name = collection_name
         
