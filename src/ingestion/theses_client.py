@@ -33,23 +33,31 @@ class ThesesClient:
         self.data_dir = data_dir
         
         # Load from ENV if not provided (PBI-026)
-        self.bucket = bucket or os.getenv("MINIO_BUCKET", "theses-bucket")
+        self.bucket = bucket or os.getenv("MINIO_BUCKET")
         self.fs = fs
         
         if not self.fs and os.getenv("MINIO_ENDPOINT_URL"):
             try:
-                self.fs = S3FileSystem(
-                    key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
-                    secret=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
-                    endpoint_url=os.getenv("MINIO_ENDPOINT_URL", "http://localhost:9000"),
-                    use_ssl=os.getenv("MINIO_USE_SSL", "False").lower() == "true"
-                )
-                logger.info(f"Initialized S3FileSystem with endpoint {os.getenv('MINIO_ENDPOINT_URL')}")
+                # Review Fix: No hardcoded secrets in defaults
+                access_key = os.getenv("MINIO_ACCESS_KEY")
+                secret_key = os.getenv("MINIO_SECRET_KEY")
+                endpoint_url = os.getenv("MINIO_ENDPOINT_URL")
                 
-                # Ensure bucket exists
-                if not self.fs.exists(self.bucket):
-                    self.fs.makedirs(self.bucket)
-                    logger.info(f"Created bucket: {self.bucket}")
+                if access_key and secret_key and endpoint_url:
+                    self.fs = S3FileSystem(
+                        key=access_key,
+                        secret=secret_key,
+                        endpoint_url=endpoint_url,
+                        use_ssl=os.getenv("MINIO_USE_SSL", "False").lower() == "true"
+                    )
+                    logger.info(f"Initialized S3FileSystem with endpoint {endpoint_url}")
+                    
+                    # Ensure bucket exists
+                    if self.bucket and not self.fs.exists(self.bucket):
+                        self.fs.makedirs(self.bucket)
+                        logger.info(f"Created bucket: {self.bucket}")
+                else:
+                    logger.warning("MinIO environment variables missing (ACCESS_KEY, SECRET_KEY or ENDPOINT_URL). Falling back to local.")
             except Exception as e:
                 logger.error(f"Failed to initialize S3FileSystem: {e}")
                 self.fs = None
