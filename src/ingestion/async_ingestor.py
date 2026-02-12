@@ -1,5 +1,6 @@
 import logging
-from typing import List
+from typing import List, Sequence
+from llama_index.core import Settings
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import Document, BaseNode
@@ -15,16 +16,17 @@ class AsyncIngestor:
         self.vector_service = vector_service
         
         # Configuration du pipeline de transformations (PBI-024)
-        # On utilise SentenceSplitter comme transformation de base
+        # On utilise SentenceSplitter et l'embed_model pour que les nœuds soient vectorisés
         # Le vector_store est intégré pour une indexation directe en fin de pipeline
         self.pipeline = IngestionPipeline(
             transformations=[
                 SentenceSplitter(chunk_size=1024, chunk_overlap=20),
+                Settings.embed_model,
             ],
             vector_store=self.vector_service.vector_store
         )
 
-    async def run_ingestion(self, documents: List[Document], show_progress: bool = True) -> List[BaseNode]:
+    async def run_ingestion(self, documents: Sequence[Document], show_progress: bool = True) -> Sequence[BaseNode]:
         """
         Exécute le pipeline d'ingestion de manière asynchrone (PBI-024).
         Supporte le traitement parallèle via num_workers.
@@ -49,7 +51,7 @@ class AsyncIngestor:
             # En production, l'utilisation d'un serveur Qdrant est requise pour cette fonctionnalité.
             
             logger.info(f"Ingestion massive terminée : {len(nodes)} nœuds créés et indexés.")
-            return nodes
+            return list(nodes)
             
         except Exception as e:
             logger.error(f"Erreur lors de l'ingestion massive : {e}")

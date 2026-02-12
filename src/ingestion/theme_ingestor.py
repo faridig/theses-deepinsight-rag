@@ -39,9 +39,13 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
         try:
             pdf_path = client.download_pdf(meta['id'], meta['urlDocument'])
             if pdf_path and os.path.exists(pdf_path):
-                # Chargement du PDF en documents LlamaIndex
-                reader = SimpleDirectoryReader(input_files=[pdf_path])
-                doc_list = reader.load_data()
+                # Chargement du PDF en documents LlamaIndex (PBI-024 Robustesse)
+                try:
+                    reader = SimpleDirectoryReader(input_files=[pdf_path])
+                    doc_list = reader.load_data()
+                except Exception as reader_error:
+                    logger.warning(f"Impossible de lire le PDF {pdf_path}: {reader_error}")
+                    continue
                 
                 # Enrichissement des métadonnées (PBI-025)
                 for doc in doc_list:

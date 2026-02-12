@@ -33,9 +33,20 @@ async def test_async_ingestion_pipeline(mock_settings):
     nodes = await ingestor.run_ingestion(docs, show_progress=False)
     
     assert len(nodes) > 0
-    # En raison de l'isolation :memory: entre sync et async, 
-    # on ne peut pas facilement vérifier via service.index (sync)
-    # mais on vérifie que le pipeline a retourné les nœuds.
+    # Vérification de la présence d'embeddings (PBI-024 Correctif)
+    for node in nodes:
+        assert node.embedding is not None
+        assert len(node.embedding) == 1536
+    
+    # Vérification de la persistance réelle dans le vector store
+    # On utilise le client asynchrone pour scroller les points
+    points, _ = await service.aclient.scroll(
+        collection_name=service.collection_name,
+        with_payload=True,
+        with_vectors=True,
+    )
+    assert len(points) > 0
+    assert len(points[0].vector) == 1536
     
     await service.aclient.close()
     service.close()
