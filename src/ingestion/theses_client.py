@@ -3,6 +3,7 @@ import os
 import logging
 from typing import List, Dict, Optional, Any
 from pathlib import Path
+from s3fs import S3FileSystem
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,7 +15,9 @@ class ThesesClient:
     Attributes:
         base_url (str): The base URL for the theses.fr search API.
         user_agent (str): The User-Agent header used for requests.
-        data_dir (str): Directory where downloaded PDFs will be stored.
+        data_dir (str): Directory where downloaded PDFs will be stored (if local).
+        fs (Optional[S3FileSystem]): S3 filesystem for remote storage.
+        bucket (Optional[str]): Bucket name for remote storage.
     """
 
     def __init__(self, data_dir: str = "data", fs: Optional[Any] = None, bucket: Optional[str] = None) -> None:
@@ -28,10 +31,33 @@ class ThesesClient:
         self.base_url = "https://theses.fr/api/v1/theses/recherche/"
         self.user_agent = "ThesesInsightBot/1.0"
         self.data_dir = data_dir
+        
+        # Load from ENV if not provided (PBI-026)
+        self.bucket = bucket or os.getenv("MINIO_BUCKET", "theses-bucket")
         self.fs = fs
-        self.bucket = bucket
+        
+        if not self.fs and os.getenv("MINIO_ENDPOINT_URL"):
+            try:
+                self.fs = S3FileSystem(
+                    key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+                    secret=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+                    endpoint_url=os.getenv("MINIO_ENDPOINT_URL", "http://localhost:9000"),
+                    use_ssl=os.getenv("MINIO_USE_SSL", "False").lower() == "true"
+                )
+                logger.info(f"Initialized S3FileSystem with endpoint {os.getenv('MINIO_ENDPOINT_URL')}")
+                
+                # Ensure bucket exists
+                if not self.fs.exists(self.bucket):
+                    self.fs.makedirs(self.bucket)
+                    logger.info(f"Created bucket: {self.bucket}")
+            except Exception as e:
+                logger.error(f"Failed to initialize S3FileSystem: {e}")
+                self.fs = None
+
         if not self.fs:
             os.makedirs(self.data_dir, exist_ok=True)
+            logger.info(f"Using local storage at {self.data_dir}")
+            
         self.headers = {"User-Agent": self.user_agent}
 
     def search(self, query: str, rows: int = 10, start: int = 0, filters: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
@@ -106,12 +132,13 @@ class ThesesClient:
                 
         return all_results
 
-    def download_pdf(self, thesis_id: str, download_url: str) -> Optional[str]:
+    def download_pdf(self, thesis_id: str, download_url: str, theme: Optional[str] = None) -> Optional[str]:
         """Downloads a PDF document for a given thesis ID.
 
         Args:
             thesis_id (str): The unique ID of the thesis.
             download_url (str): The URL where the PDF is located.
+            theme (Optional[str]): Optional theme for organization (PBI-026).
 
         Returns:
             Optional[str]: The path (local or S3) to the downloaded file if successful, None otherwise.
@@ -121,9 +148,17 @@ class ThesesClient:
             return None
 
         if self.fs and self.bucket:
-            file_path = f"{self.bucket}/{thesis_id}.pdf"
+            if theme:
+                file_path = f"{self.bucket}/{theme}/{thesis_id}.pdf"
+            else:
+                file_path = f"{self.bucket}/{thesis_id}.pdf"
         else:
-            file_path = str(Path(self.data_dir) / f"{thesis_id}.pdf")
+            if theme:
+                target_dir = Path(self.data_dir) / theme
+                os.makedirs(target_dir, exist_ok=True)
+                file_path = str(target_dir / f"{thesis_id}.pdf")
+            else:
+                file_path = str(Path(self.data_dir) / f"{thesis_id}.pdf")
         
         try:
             with httpx.Client(headers=self.headers, timeout=30.0, follow_redirects=True) as client:
@@ -134,6 +169,7 @@ class ThesesClient:
                 response.raise_for_status()
                 
                 if self.fs:
+                    # Open with 'wb' as requested in PBI-026
                     with self.fs.open(file_path, "wb") as f:
                         f.write(response.content)
                 else:
