@@ -1,6 +1,5 @@
 import os
 import pytest
-import asyncio
 from src.indexing.vector_service import VectorService
 from src.ingestion.async_ingestor import AsyncIngestor
 from llama_index.core.schema import Document

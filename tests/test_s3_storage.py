@@ -38,7 +38,6 @@ async def test_s3_download_mock(s3_config):
     test_url = "http://example.com/test.pdf"
     
     # On simule un téléchargement réussi sans appeler l'URL réelle
-    import httpx
     from unittest.mock import MagicMock, patch
 
     with patch("httpx.Client.get") as mock_get:
