@@ -7,7 +7,13 @@ from llama_index.core.embeddings import MockEmbedding
 @pytest.fixture
 def storage_path(tmp_path):
     """Fixture to provide a temporary storage path for each test."""
-    path = tmp_path / "chroma"
+    # On utilise ":memory:" pour les tests simples pour éviter les problèmes de verrouillage Qdrant
+    return ":memory:"
+
+@pytest.fixture
+def persist_storage_path(tmp_path):
+    """Fixture to provide a persistent storage path for persistence tests."""
+    path = tmp_path / "qdrant_test"
     return str(path)
 
 @pytest.fixture
@@ -19,58 +25,65 @@ def mock_settings():
 def test_vector_service_indexing_and_retrieval(storage_path, mock_settings):
     # Initialize service
     service = VectorService(storage_path=storage_path, collection_name="test_collection")
-    
-    # Create test nodes with 'window' metadata
-    node1 = TextNode(
-        text="Ceci est le contenu de la thèse sur l'intelligence artificielle.",
-        metadata={"title": "Thèse AI", "window": "Contexte de la thèse sur l'IA."}
-    )
-    node2 = TextNode(
-        text="L'apprentissage profond révolutionne le domaine médical.",
-        metadata={"title": "IA Médicale", "window": "Contexte de l'IA en médecine."}
-    )
-    
-    nodes = [node1, node2]
-    
-    # Index nodes
-    service.index_nodes(nodes)
-    
-    # Check that index is created
-    assert service.index is not None
-    
-    # Search for a query matching node 2
-    retriever = service.get_retriever(similarity_top_k=1)
-    results = retriever.retrieve("apprentissage profond")
-    
-    # Verify results
-    assert len(results) > 0
-    top_node = results[0].node
-    
-    # Since MockEmbedding is random, we check that whichever node is returned has its correct metadata
-    if "apprentissage profond" in top_node.get_content():
-        assert top_node.metadata["window"] == "Contexte de l'IA en médecine."
-        assert top_node.metadata["title"] == "IA Médicale"
-    else:
-        assert "intelligence artificielle" in top_node.get_content()
-        assert top_node.metadata["window"] == "Contexte de la thèse sur l'IA."
-        assert top_node.metadata["title"] == "Thèse AI"
-    
-    # The most important part: verify metadata 'window' exists (Verification cruciale)
-    assert "window" in top_node.metadata
+    try:
+        # Create test nodes with 'window' metadata
+        node1 = TextNode(
+            text="Ceci est le contenu de la thèse sur l'intelligence artificielle.",
+            metadata={"title": "Thèse AI", "window": "Contexte de la thèse sur l'IA."}
+        )
+        node2 = TextNode(
+            text="L'apprentissage profond révolutionne le domaine médical.",
+            metadata={"title": "IA Médicale", "window": "Contexte de l'IA en médecine."}
+        )
+        
+        nodes = [node1, node2]
+        
+        # Index nodes
+        service.index_nodes(nodes)
+        
+        # Check that index is created
+        assert service.index is not None
+        
+        # Search for a query matching node 2
+        retriever = service.get_retriever(similarity_top_k=1)
+        results = retriever.retrieve("apprentissage profond")
+        
+        # Verify results
+        assert len(results) > 0
+        top_node = results[0].node
+        
+        # Since MockEmbedding is random, we check that whichever node is returned has its correct metadata
+        if "apprentissage profond" in top_node.get_content():
+            assert top_node.metadata["window"] == "Contexte de l'IA en médecine."
+            assert top_node.metadata["title"] == "IA Médicale"
+        else:
+            assert "intelligence artificielle" in top_node.get_content()
+            assert top_node.metadata["window"] == "Contexte de la thèse sur l'IA."
+            assert top_node.metadata["title"] == "Thèse AI"
+        
+        # The most important part: verify metadata 'window' exists (Verification cruciale)
+        assert "window" in top_node.metadata
+    finally:
+        service.close()
 
-def test_vector_service_persistence(storage_path, mock_settings):
+def test_vector_service_persistence(persist_storage_path, mock_settings):
     # 1. First session: index nodes
-    service1 = VectorService(storage_path=storage_path, collection_name="test_persist_collection")
-    node1 = TextNode(text="Les énergies renouvelables sont l'avenir.", metadata={"window": "Contexte énergie."})
-    service1.index_nodes([node1])
+    service1 = VectorService(storage_path=persist_storage_path, collection_name="test_persist_collection")
+    try:
+        node1 = TextNode(text="Les énergies renouvelables sont l'avenir.", metadata={"window": "Contexte énergie."})
+        service1.index_nodes([node1])
+    finally:
+        service1.close() # CRITIQUE: Fermer pour libérer le verrou
     
     # 2. Second session: load index and query without re-indexing
     # We create a new service instance pointing to the same storage
-    service2 = VectorService(storage_path=storage_path, collection_name="test_persist_collection")
-    
-    # The index property should load it automatically from the vector store
-    results = service2.query("énergies", similarity_top_k=1)
-    
-    assert len(results) > 0
-    assert "énergies" in results[0].node.get_content()
-    assert results[0].node.metadata.get("window") == "Contexte énergie."
+    service2 = VectorService(storage_path=persist_storage_path, collection_name="test_persist_collection")
+    try:
+        # The index property should load it automatically from the vector store
+        results = service2.query("énergies", similarity_top_k=1)
+        
+        assert len(results) > 0
+        assert "énergies" in results[0].node.get_content()
+        assert results[0].node.metadata.get("window") == "Contexte énergie."
+    finally:
+        service2.close()

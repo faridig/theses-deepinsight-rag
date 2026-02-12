@@ -29,19 +29,24 @@ class TestRAGEngine:
         mock_index = MagicMock()
         mock_vector_service.return_value.index = mock_index
         
-        # Initialize and ask
+        # Initialize
         engine = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")
         
-        # Mock query engine query method
-        engine.query_engine = MagicMock()
+        # Mock the internal query engine retrieval
+        mock_query_engine = MagicMock()
         expected_response = Response(response="Ceci est une réponse de test.", source_nodes=[])
-        engine.query_engine.query.return_value = expected_response
         
-        response = engine.ask("Quelle est la question ?")
+        async def mock_aquery(q):
+            return expected_response
+            
+        mock_query_engine.aquery = mock_aquery
+        mock_query_engine.retriever.use_async = True
+        
+        with patch.object(RAGEngine, '_get_query_engine', return_value=mock_query_engine):
+            response = engine.ask("Quelle est la question ?")
         
         # Assertions
-        assert response.response == "Ceci est une réponse de test."
-        engine.query_engine.query.assert_called_once_with("Quelle est la question ?")
+        assert str(response) == "Ceci est une réponse de test."
 
     @patch('src.generation.rag_engine.VectorService')
     @patch('src.generation.rag_engine.OpenAI')

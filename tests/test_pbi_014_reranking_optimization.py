@@ -24,6 +24,7 @@ class TestRerankingOptimization:
         
         # Initialize engine
         engine = RAGEngine(storage_path="/tmp/test_chroma", collection_name="test_collection")
+        _ = engine.index # Déclenche l'initialisation
         
         # Scenario 1: Réduction du top_k
         assert RETRIEVAL_TOP_K == 10

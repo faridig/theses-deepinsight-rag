@@ -3,7 +3,7 @@ from datasets import Dataset
 import logging
 from ragas.llms import LlamaIndexLLMWrapper
 from ragas.embeddings import LlamaIndexEmbeddingsWrapper
-from ragas.metrics import (
+from ragas.metrics.collections import (
     Faithfulness,
     AnswerRelevancy,
     ContextPrecision,
