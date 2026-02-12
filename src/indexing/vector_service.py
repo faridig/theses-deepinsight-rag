@@ -5,9 +5,8 @@ import asyncio
 from typing import Optional, Sequence, Any
 from qdrant_client import QdrantClient, AsyncQdrantClient
 from qdrant_client.http import models as rest
-from llama_index.core import StorageContext, VectorStoreIndex, Settings
+from llama_index.core import StorageContext, VectorStoreIndex
 from llama_index.vector_stores.qdrant import QdrantVectorStore
-from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.schema import BaseNode, TextNode
 
 logger = logging.getLogger(__name__)
