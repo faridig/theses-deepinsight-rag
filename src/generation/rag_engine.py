@@ -4,14 +4,11 @@ import asyncio
 import time
 import sys
 from typing import List, Optional, Dict
-from dotenv import load_dotenv
 
 from llama_index.core import (
     Settings,
     PromptTemplate,
 )
-from llama_index.llms.openai import OpenAI
-from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
@@ -22,6 +19,8 @@ from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.core.base.response.schema import Response
 from src.indexing.vector_service import VectorService
+
+from src.config import setup_settings
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
@@ -39,8 +38,6 @@ logging.getLogger("opentelemetry").setLevel(logging.ERROR)
 logging.getLogger("bm25s").setLevel(logging.WARNING)
 logging.getLogger("llama_index.core.llms.utils").setLevel(logging.ERROR)
 logging.getLogger("llama_index.core.settings").setLevel(logging.ERROR)
-
-load_dotenv()
 
 class ParallelMultiQueryRetriever(QueryFusionRetriever):
     """
@@ -109,7 +106,7 @@ class RAGEngine:
     """
     def __init__(self, storage_path: str = "./storage/qdrant", collection_name: str = "theses-default"):
         # 1. Configuration globale (Lazy & Respectful of existing settings/mocks)
-        self._init_global_settings()
+        setup_settings()
         
         self.storage_path = storage_path
         self.default_collection = collection_name
@@ -149,44 +146,6 @@ class RAGEngine:
             "QUESTION : {query_str}\n"
             "RÉPONSE : "
         )
-
-    def _init_global_settings(self):
-        """Initialise Settings.llm et Settings.embed_model sans écraser les mocks existants."""
-        # On évite de toucher à Settings si on est en environnement de test ou si déjà configuré
-        has_openai_key = bool(os.getenv("OPENAI_API_KEY"))
-        
-        # On définit IS_TESTING si on n'a pas de clé pour aider llama-index à choisir MockLLM
-        if not has_openai_key:
-            os.environ["IS_TESTING"] = "1"
-
-        from llama_index.core.llms import MockLLM
-        from llama_index.core.embeddings import MockEmbedding
-        
-        # Pour le LLM
-        try:
-            if not isinstance(Settings.llm, (MockLLM, OpenAI)):
-                if has_openai_key:
-                    Settings.llm = OpenAI(model="gpt-4o-mini")
-                else:
-                    Settings.llm = MockLLM()
-        except Exception:
-            if has_openai_key:
-                Settings.llm = OpenAI(model="gpt-4o-mini")
-            else:
-                Settings.llm = MockLLM()
-        
-        # Pour l'Embedding
-        try:
-            if not isinstance(Settings.embed_model, (MockEmbedding, OpenAIEmbedding)):
-                if has_openai_key:
-                    Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
-                else:
-                    Settings.embed_model = MockEmbedding(embed_dim=1536)
-        except Exception:
-            if has_openai_key:
-                Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
-            else:
-                Settings.embed_model = MockEmbedding(embed_dim=1536)
 
     @property
     def index(self):

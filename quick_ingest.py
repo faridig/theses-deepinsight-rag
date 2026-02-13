@@ -1,8 +1,12 @@
 import os
+from src.config import setup_settings
 from src.processing.parser import ThesisParser
 from src.indexing.vector_service import VectorService
 
 def main():
+    # Initialisation des paramètres globaux
+    setup_settings()
+    
     parser = ThesisParser()
     service = VectorService()
     
