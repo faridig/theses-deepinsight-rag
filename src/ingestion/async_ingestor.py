@@ -1,9 +1,12 @@
 import logging
-from typing import Sequence
+import os
+import asyncio
+from typing import Sequence, Optional
 from llama_index.core import Settings
-from llama_index.core.ingestion import IngestionPipeline
+from llama_index.core.ingestion import IngestionPipeline, IngestionCache
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import Document, BaseNode
+from llama_index.core.storage.kvstore import SimpleKVStore
 from src.indexing.vector_service import VectorService
 
 logger = logging.getLogger(__name__)
@@ -11,46 +14,78 @@ logger = logging.getLogger(__name__)
 class AsyncIngestor:
     """
     Ingesteur asynchrone utilisant IngestionPipeline pour un traitement massif et parallèle (PBI-024).
+    Inclut un cache d'ingestion pour l'idempotence (PBI-027).
     """
-    def __init__(self, vector_service: VectorService):
+    def __init__(self, vector_service: VectorService, cache_path: Optional[str] = None):
         self.vector_service = vector_service
         
+        # Configuration du cache (PBI-027)
+        cache = None
+        self.kv_store = None
+        if cache_path:
+            try:
+                # S'assurer que le dossier existe
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                if os.path.exists(cache_path):
+                    self.kv_store = SimpleKVStore.from_persist_path(cache_path)
+                    logger.info(f"Loaded existing IngestionCache from {cache_path}")
+                else:
+                    self.kv_store = SimpleKVStore()
+                cache = IngestionCache(kvstore=self.kv_store)
+                self.cache_path = cache_path
+                logger.info(f"IngestionCache initialized (path: {cache_path})")
+            except Exception as e:
+                logger.warning(f"Failed to initialize IngestionCache: {e}")
+                cache = None
+
         # Configuration du pipeline de transformations (PBI-024)
-        # On utilise SentenceSplitter et l'embed_model pour que les nœuds soient vectorisés
-        # Le vector_store est intégré pour une indexation directe en fin de pipeline
         self.pipeline = IngestionPipeline(
             transformations=[
                 SentenceSplitter(chunk_size=1024, chunk_overlap=20),
                 Settings.embed_model,
             ],
-            vector_store=self.vector_service.vector_store
+            vector_store=self.vector_service.vector_store,
+            cache=cache
         )
 
     async def run_ingestion(self, documents: Sequence[Document], show_progress: bool = True) -> Sequence[BaseNode]:
         """
-        Exécute le pipeline d'ingestion de manière asynchrone (PBI-024).
-        Supporte le traitement parallèle via num_workers.
+        Exécute le pipeline d'ingestion de manière robuste (PBI-024).
+        Bascule en mode synchrone si le client Qdrant asynchrone est absent (mode local).
         """
         if not documents:
             logger.warning("Aucun document à ingester.")
             return []
             
-        logger.info(f"Démarrage de l'ingestion asynchrone pour {len(documents)} documents.")
+        logger.info(f"Démarrage de l'ingestion pour {len(documents)} documents.")
         
         try:
-            # Lancement asynchrone du pipeline (arun) pour un traitement total non-bloquant
-            # num_workers permet la parallélisation locale du parsing
-            nodes = await self.pipeline.arun(
-                documents=documents, 
-                show_progress=show_progress,
-                num_workers=4 
-            )
+            # Gestion de la rupture du mode Local (Review Fix)
+            # pipeline.arun nécessite obligatoirement un aclient dans le vector_store
+            if self.vector_service.aclient:
+                nodes = await self.pipeline.arun(
+                    documents=documents, 
+                    show_progress=show_progress,
+                    num_workers=4 
+                )
+            else:
+                logger.info("Mode Local détecté (pas de client asynchrone). Exécution synchrone du pipeline.")
+                # On utilise asyncio.to_thread pour ne pas bloquer l'event loop
+                nodes = await asyncio.to_thread(
+                    self.pipeline.run,
+                    documents=documents,
+                    show_progress=show_progress
+                )
             
-            # Note: Si vector_service.aclient est None (mode local), 
-            # LlamaIndex pourrait lever une erreur lors de l'insertion.
-            # En production, l'utilisation d'un serveur Qdrant est requise pour cette fonctionnalité.
+            # Persistance du cache (Review Fix: utilisation de self.kv_store)
+            if self.kv_store and hasattr(self, 'cache_path'):
+                try:
+                    self.kv_store.persist(self.cache_path)
+                    logger.info(f"IngestionCache saved to {self.cache_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to persist IngestionCache: {e}")
             
-            logger.info(f"Ingestion massive terminée : {len(nodes)} nœuds créés et indexés.")
+            logger.info(f"Ingestion terminée : {len(nodes)} nœuds traités.")
             return list(nodes)
             
         except Exception as e:
