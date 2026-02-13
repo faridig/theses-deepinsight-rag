@@ -6,7 +6,7 @@ from llama_index.core.llms.mock import MockLLM
 class TestRAGEngine:
 
     @patch('src.generation.rag_engine.VectorService')
-    @patch('src.generation.rag_engine.OpenAI')
+    @patch('llama_index.llms.openai.OpenAI')
     @patch('src.generation.rag_engine.CohereRerank')
     def test_rag_engine_initialization(self, mock_cohere, mock_openai, mock_vector_service):
         # Setup mocks
@@ -21,7 +21,7 @@ class TestRAGEngine:
         assert engine.index == mock_index
         
     @patch('src.generation.rag_engine.VectorService')
-    @patch('src.generation.rag_engine.OpenAI')
+    @patch('llama_index.llms.openai.OpenAI')
     @patch('src.generation.rag_engine.CohereRerank')
     def test_rag_engine_ask(self, mock_cohere, mock_openai, mock_vector_service):
         # Setup mocks
@@ -49,7 +49,7 @@ class TestRAGEngine:
         assert str(response) == "Ceci est une réponse de test."
 
     @patch('src.generation.rag_engine.VectorService')
-    @patch('src.generation.rag_engine.OpenAI')
+    @patch('llama_index.llms.openai.OpenAI')
     @patch('src.generation.rag_engine.CohereRerank')
     def test_rag_engine_ask_empty_question(self, mock_cohere, mock_openai, mock_vector_service):
         # Setup mocks

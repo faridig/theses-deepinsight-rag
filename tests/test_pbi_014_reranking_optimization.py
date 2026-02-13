@@ -6,7 +6,7 @@ from llama_index.core.llms.mock import MockLLM
 class TestRerankingOptimization:
 
     @patch('src.generation.rag_engine.VectorService')
-    @patch('src.generation.rag_engine.OpenAI')
+    @patch('llama_index.llms.openai.OpenAI')
     @patch('src.generation.rag_engine.CohereRerank')
     @patch('src.generation.rag_engine.BM25Retriever')
     def test_top_k_reduction_config(self, mock_bm25, mock_cohere, mock_openai, mock_vector_service):

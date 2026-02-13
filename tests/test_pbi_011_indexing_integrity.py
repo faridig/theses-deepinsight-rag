@@ -4,9 +4,9 @@ from src.processing.parser import ThesisParser
 # We mock the environment variable just to allow ThesisParser to initialize
 @patch.dict('os.environ', {'LLAMA_CLOUD_API_KEY': 'DUMMY_KEY'})
 @patch('src.processing.parser.LlamaParse', autospec=True)
-@patch('src.processing.parser.Settings', autospec=True)
-@patch('src.processing.parser.OpenAI', autospec=True)
-@patch('src.processing.parser.OpenAIEmbedding', autospec=True)
+@patch('llama_index.core.Settings', autospec=True)
+@patch('llama_index.llms.openai.OpenAI', autospec=True)
+@patch('llama_index.embeddings.openai.OpenAIEmbedding', autospec=True)
 @patch('src.processing.parser.SentenceWindowNodeParser', autospec=True)
 class TestPBI011IndexingIntegrity:
     

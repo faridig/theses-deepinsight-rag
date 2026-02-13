@@ -3,9 +3,7 @@ from typing import List, Optional, Any
 import nest_asyncio
 import torch
 from llama_parse import LlamaParse
-from llama_index.core import StorageContext, Settings, Document, SimpleDirectoryReader
-from llama_index.llms.openai import OpenAI
-from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.core import StorageContext, Document, SimpleDirectoryReader
 from llama_index.core.node_parser import SentenceWindowNodeParser
 from llama_index.core.schema import BaseNode
 from llama_index.readers.docling import DoclingReader
@@ -14,17 +12,13 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.accelerator_options import AcceleratorOptions, AcceleratorDevice
 from docling.datamodel.pipeline_options import PdfPipelineOptions
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-# Configure Global Settings for OpenAI
-Settings.llm = OpenAI(model="gpt-4o")
-Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+from src.config import setup_settings
 
 # Apply nest_asyncio for async operations in environments that need it
 nest_asyncio.apply()
+
+# Initialisation des paramètres globaux
+setup_settings()
 
 class ThesisParser:
     """

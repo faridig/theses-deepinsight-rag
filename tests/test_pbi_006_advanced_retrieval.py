@@ -5,7 +5,7 @@ from llama_index.core.llms.mock import MockLLM
 
 class TestAdvancedRetrieval:
     @patch('src.generation.rag_engine.VectorService')
-    @patch('src.generation.rag_engine.OpenAI')
+    @patch('llama_index.llms.openai.OpenAI')
     @patch('src.generation.rag_engine.CohereRerank')
     @patch('src.generation.rag_engine.ParallelMultiQueryRetriever')
     @patch('src.generation.rag_engine.RetrieverQueryEngine')
