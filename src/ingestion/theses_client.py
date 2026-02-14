@@ -110,7 +110,7 @@ class ThesesClient:
                         "titre": doc.get("titrePrincipal"),
                         "auteurs": [f"{a.get('prenom', '')} {a.get('nom', '')}".strip() for a in doc.get("auteurs", [])],
                         "dateSoutenance": doc.get("dateSoutenance"),
-                        "university": doc.get("etablissementSoutenance"), # Enrichissement (PBI-027)
+                        "university": doc.get("etabSoutenanceN"), # Enrichissement (PBI-027)
                         "discipline": doc.get("discipline"),
                         "resume": None,
                         "urlDocument": url_document
