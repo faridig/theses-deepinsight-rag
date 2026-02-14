@@ -120,6 +120,11 @@ class ThesesClient:
             logger.error(f"Error during search for query '{full_query}': {e}")
             return []
 
+    def get_by_id(self, thesis_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves metadata for a specific thesis by its ID (PBI-027)."""
+        results = self.search(f'id:"{thesis_id}"', rows=1)
+        return results[0] if results else None
+
     def search_all(self, query: str, limit: int = 100, filters: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
         """Searches for all theses up to a limit using pagination (PBI-025)."""
         all_results = []

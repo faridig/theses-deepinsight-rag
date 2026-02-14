@@ -149,18 +149,61 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
         
         # 3. Chargement siloté (SimpleDirectoryReader sur préfixe spécifique)
         try:
-            reader = SimpleDirectoryReader(
-                input_dir=theme_folder,
-                fs=client.fs,
-                recursive=True
-            )
-            documents = reader.load_data()
+            # Récupération des fichiers individuels pour enrichissement par ID (Review Fix)
+            files = client.fs.ls(theme_folder)
+            documents = []
+            
+            for file_path in files:
+                if not file_path.lower().endswith(".pdf"):
+                    continue
+                
+                # Validation Proactive
+                if not PDFValidator.validate(file_path, fs=client.fs):
+                    logger.warning(f"Fichier S3 {file_path} invalide. Quarantaine.")
+                    quarantine_dir = "quarantine"
+                    if not client.fs.exists(quarantine_dir):
+                        client.fs.makedirs(quarantine_dir)
+                    client.fs.mv(file_path, f"{quarantine_dir}/{os.path.basename(file_path)}")
+                    continue
+                
+                # Chargement
+                reader = SimpleDirectoryReader(input_files=[file_path], fs=client.fs)
+                doc_list = reader.load_data()
+                
+                # Extraction ID du nom de fichier (ex: 2017REN1G007.pdf)
+                thesis_id = os.path.basename(file_path).replace(".pdf", "")
+                meta = client.get_by_id(thesis_id)
+                
+                if meta:
+                    date_soutenance = meta.get('dateSoutenance')
+                    year = "Inconnue"
+                    if date_soutenance:
+                        if "/" in date_soutenance:
+                            year = date_soutenance.split("/")[-1]
+                        elif "-" in date_soutenance:
+                            year = date_soutenance.split("-")[0]
+                        elif len(date_soutenance) >= 4:
+                            year = date_soutenance[:4]
+                    
+                    for doc in doc_list:
+                        doc.metadata.update({
+                            "id_these": meta.get('id'),
+                            "titre": meta.get('titre'),
+                            "auteur": ", ".join(meta.get('auteurs', [])),
+                            "discipline": meta.get('discipline'),
+                            "year": year,
+                            "university": meta.get('university'),
+                            "theme_silo": theme_slug
+                        })
+                else:
+                    logger.warning(f"Métadonnées introuvables pour {thesis_id} via API.")
+                    for doc in doc_list:
+                        doc.metadata["theme_silo"] = theme_slug
+                        doc.metadata["id_these"] = thesis_id
+                
+                documents.extend(doc_list)
             
             if documents:
-                # Injection de métadonnées pour double vérification (PBI-027 CA)
-                for doc in documents:
-                    doc.metadata["theme_silo"] = theme_slug
-                
                 await ingestor.run_ingestion(documents)
                 logger.info(f"Silo {theme_slug} ingéré avec succès.")
             else:
