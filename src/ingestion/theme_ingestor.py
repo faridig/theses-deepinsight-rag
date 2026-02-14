@@ -46,7 +46,7 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
             if pdf_path:
                 # Validation Proactive (PBI-027)
                 if not PDFValidator.validate(pdf_path, fs=client.fs):
-                    logger.warning(f"Thèse {meta['id']} invalide ou corrompue. Mise en quarantaine.")
+                    logger.warning(f"Thèse {meta['id']} invalide ou corrompue (URL: {meta['urlDocument']}). Mise en quarantaine.")
                     if client.fs:
                         quarantine_dir = "quarantine"
                         if not client.fs.exists(quarantine_dir):
