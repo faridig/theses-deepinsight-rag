@@ -7,6 +7,7 @@ from src.ingestion.theses_client import ThesesClient
 class TestThesesClient(unittest.TestCase):
     def setUp(self):
         self.client = ThesesClient()
+        self.client.fs = None # Force local mode for unit tests
         self.test_data_dir = "data/test_outputs"
         os.makedirs(self.test_data_dir, exist_ok=True)
         self.client.data_dir = self.test_data_dir
