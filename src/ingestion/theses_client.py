@@ -122,8 +122,11 @@ class ThesesClient:
 
     def get_by_id(self, thesis_id: str) -> Optional[Dict[str, Any]]:
         """Retrieves metadata for a specific thesis by its ID (PBI-027)."""
-        results = self.search(f'id:"{thesis_id}"', rows=1)
-        return results[0] if results else None
+        # Theses.fr API expects the ID in raw text, not prefixed with id:
+        results = self.search(thesis_id, rows=1)
+        if results and results[0].get("id") == thesis_id:
+            return results[0]
+        return None
 
     def search_all(self, query: str, limit: int = 100, filters: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
         """Searches for all theses up to a limit using pagination (PBI-025)."""
