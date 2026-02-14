@@ -110,6 +110,7 @@ class ThesesClient:
                         "titre": doc.get("titrePrincipal"),
                         "auteurs": [f"{a.get('prenom', '')} {a.get('nom', '')}".strip() for a in doc.get("auteurs", [])],
                         "dateSoutenance": doc.get("dateSoutenance"),
+                        "university": doc.get("etabSoutenanceN"), # Enrichissement (PBI-027)
                         "discipline": doc.get("discipline"),
                         "resume": None,
                         "urlDocument": url_document
@@ -118,6 +119,14 @@ class ThesesClient:
         except httpx.HTTPError as e:
             logger.error(f"Error during search for query '{full_query}': {e}")
             return []
+
+    def get_by_id(self, thesis_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves metadata for a specific thesis by its ID (PBI-027)."""
+        # Theses.fr API expects the ID in raw text, not prefixed with id:
+        results = self.search(thesis_id, rows=1)
+        if results and results[0].get("id") == thesis_id:
+            return results[0]
+        return None
 
     def search_all(self, query: str, limit: int = 100, filters: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
         """Searches for all theses up to a limit using pagination (PBI-025)."""
