@@ -35,9 +35,12 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-020** | **Docker-Compose Infra** | Setup MinIO & Qdrant en conteneurs (Gratuité & Portabilité). | DONE | HAUTE |
 | **PBI-021** | **Abstraction S3 Storage** | Refactoring pour utiliser l'API S3 au lieu du FileSystem local. | DONE | HAUTE |
 | **PBI-022** | **Migration Qdrant Production** | Bascule de ChromaDB vers Qdrant (gRPC, performance, Cloud-Ready). | EN ATTENTE | MOYENNE |
-| **PBI-023** | **Architecture Multi-Collections** | Gestionnaire de thèmes (Namespacing) pour l'isolation des données. | EN ATTENTE | HAUTE |
-| **PBI-024** | **Async Ingestion Pipeline** | Ingestion massive multi-threadée/asynchrone avec `IngestionPipeline`. | EN ATTENTE | MOYENNE |
-| **PBI-025** | **Ingesteur Thématique Robuste** | Script de scraping theses.fr dynamique par discipline/sujet. | EN ATTENTE | MOYENNE |
+| **PBI-023** | **Architecture Multi-Collections** | Gestionnaire de thèmes (Namespacing) pour l'isolation des données. | DONE | HAUTE |
+| **PBI-024** | **Async Ingestion Pipeline** | Ingestion massive multi-threadée/asynchrone avec `IngestionPipeline`. | DONE | MOYENNE |
+| **PBI-025** | **Ingesteur Thématique Robuste** | Script de scraping theses.fr dynamique par discipline/sujet. | DONE | MOYENNE |
+| **PBI-026** | **Hygiène de l'Infrastructure** | Nettoyage des buckets MinIO inutiles et purge du stockage local `data/`. | DONE | MOYENNE |
+| **PBI-027** | **Seeding Multi-Domaines & Validation PDF** | Ingestion massive de thèses avec validation d'intégrité et gestion des erreurs. | DONE | HAUTE |
+| **PBI-028** | **Hygiène des Données : Dédoublonnage & Santé** | Mise en place du hashing ID pour éviter les doublons et dashboard de statut. | EN ATTENTE | MOYENNE |
 | **PBI-013** | **Nightly Audit Ragas** | Pipeline d'évaluation auto sur traces Phoenix réelles. | EN ATTENTE | HAUTE |
 
 ---
@@ -50,4 +53,4 @@ Tout ticket entrant en Sprint doit comporter :
 - Justification technologique (context7).
 
 ---
-*Dernière mise à jour : 11/02/2026*
+*Dernière mise à jour : 13/02/2026*

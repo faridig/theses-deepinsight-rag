@@ -9,6 +9,9 @@ from llama_index.core.embeddings import MockEmbedding
 
 logger = logging.getLogger(__name__)
 
+# Silence technique (PBI-027)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 def setup_settings():
     """
     Initialise les paramètres globaux de LlamaIndex (LLM et Embeddings).

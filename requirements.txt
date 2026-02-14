@@ -202,6 +202,7 @@ Pygments==2.19.2
 pylatexenc==2.10
 pypdf==6.6.2
 pypdfium2==5.4.0
+PyMuPDF==1.27.1
 PyPika==0.51.1
 pyproject_hooks==1.2.0
 pystache==0.6.8

@@ -4,6 +4,7 @@ from llama_index.core import SimpleDirectoryReader
 from src.ingestion.theses_client import ThesesClient
 from src.ingestion.async_ingestor import AsyncIngestor
 from src.indexing.vector_service import VectorService
+from src.utils.pdf_validator import PDFValidator
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,16 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
             # Téléchargement vers S3 ou local selon configuration (PBI-026)
             pdf_path = client.download_pdf(meta['id'], meta['urlDocument'], theme=slug_theme)
             if pdf_path:
+                # Validation Proactive (PBI-027)
+                if not PDFValidator.validate(pdf_path, fs=client.fs):
+                    logger.warning(f"Thèse {meta['id']} invalide ou corrompue. Mise en quarantaine.")
+                    if client.fs:
+                        quarantine_dir = "quarantine"
+                        if not client.fs.exists(quarantine_dir):
+                            client.fs.makedirs(quarantine_dir)
+                        client.fs.mv(pdf_path, f"{quarantine_dir}/{os.path.basename(pdf_path)}")
+                    continue
+
                 # Chargement du PDF en documents LlamaIndex (PBI-024 Robustesse)
                 try:
                     if client.fs:
@@ -57,13 +68,25 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
                     logger.warning(f"Impossible de lire le PDF {pdf_path}: {reader_error}")
                     continue
                 
-                # Enrichissement des métadonnées (PBI-025)
+                # Enrichissement des métadonnées (PBI-025 & PBI-027)
+                date_soutenance = meta.get('dateSoutenance')
+                year = "Inconnue"
+                if date_soutenance:
+                    if "/" in date_soutenance:
+                        year = date_soutenance.split("/")[-1]
+                    elif "-" in date_soutenance:
+                        year = date_soutenance.split("-")[0]
+                    elif len(date_soutenance) >= 4:
+                        year = date_soutenance[:4]
+                
                 for doc in doc_list:
                     doc.metadata.update({
                         "id_these": meta.get('id'),
                         "titre": meta.get('titre'),
                         "auteur": ", ".join(meta.get('auteurs', [])),
                         "discipline": meta.get('discipline'),
+                        "year": year, # PBI-027
+                        "university": meta.get('university'), # PBI-027
                         "theme": theme_name, # Métadonnée thématique
                         "slug": slug_theme
                     })
