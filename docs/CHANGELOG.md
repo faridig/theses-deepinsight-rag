@@ -2,10 +2,12 @@
 
 ## [1.3.0] - 2026-02-14
 ### Ajouté
-- **Sprint 12 : Qualité de Données & Hygiène (PBI-026, 027)**
-    - Enrichment des métadonnées (`year`, `university`) pour chaque document indexé.
+- **Sprint 12 : Qualité de Données & Hygiène (PBI-026, 027, 028)**
+    - Enrichment des métadonnées (`year`, `university`) pour chaque document indexé via API theses.fr.
     - `PDFValidator` proactif pour garantir l'intégrité et la taille minimale (10Ko) des fichiers.
     - Script `scripts/cleanup_infra.py` pour la maintenance des buckets S3 et du stockage local.
+    - Système de **Dédoublonnage SHA-256** (Stockage unique par contenu PDF).
+    - Commande `python manage.py health` pour le monitoring de la santé du système.
     - Réduction du bruit technique via la configuration du logger `httpx`.
     - Système de mise en quarantaine pour les PDF suspects ou corrompus.
 

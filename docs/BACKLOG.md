@@ -40,7 +40,7 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-025** | **Ingesteur Thématique Robuste** | Script de scraping theses.fr dynamique par discipline/sujet. | DONE | MOYENNE |
 | **PBI-026** | **Hygiène de l'Infrastructure** | Nettoyage des buckets MinIO inutiles et purge du stockage local `data/`. | DONE | MOYENNE |
 | **PBI-027** | **Seeding Multi-Domaines & Validation PDF** | Ingestion massive de thèses avec validation d'intégrité et gestion des erreurs. | DONE | HAUTE |
-| **PBI-028** | **Hygiène des Données : Dédoublonnage & Santé** | Mise en place du hashing ID pour éviter les doublons et dashboard de statut. | EN ATTENTE | MOYENNE |
+| **PBI-028** | **Hygiène des Données : Dédoublonnage & Santé** | Mise en place du hashing ID pour éviter les doublons et dashboard de statut. | DONE | MOYENNE |
 | **PBI-013** | **Nightly Audit Ragas** | Pipeline d'évaluation auto sur traces Phoenix réelles. | EN ATTENTE | HAUTE |
 
 ---
