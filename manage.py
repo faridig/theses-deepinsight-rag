@@ -1,8 +1,6 @@
 import click
-import asyncio
 import logging
 import os
-from src.indexing.vector_service import VectorService
 from src.ingestion.theses_client import ThesesClient
 from tabulate import tabulate
 from qdrant_client import QdrantClient
@@ -47,6 +45,8 @@ def health(storage_path):
             # Pour la démo, on scanne les 100 premiers points de chaque collection
             points, _ = client.scroll(name, limit=100, with_payload=True)
             for p in points:
+                if not isinstance(p.payload, dict):
+                    continue
                 univ = p.payload.get("university")
                 if univ:
                     universities[univ] = universities.get(univ, 0) + 1
@@ -61,7 +61,7 @@ def health(storage_path):
         try:
             if theses_client.fs.exists("quarantine"):
                 quarantine_count = len(theses_client.fs.ls("quarantine"))
-        except:
+        except Exception:
             pass
     else:
         q_dir = os.path.join(theses_client.data_dir, "quarantine")

@@ -2,7 +2,7 @@ import httpx
 import os
 import logging
 import hashlib
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any
 from pathlib import Path
 from s3fs import S3FileSystem
 

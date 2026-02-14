@@ -175,6 +175,7 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
                     # Ancienne structure : item_path est le PDF lui-même
                     pdf_path = item_path
                     thesis_id = os.path.basename(item_path).replace(".pdf", "")
+                    file_hash = None
                 else:
                     continue
                 
@@ -213,7 +214,7 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
                             "discipline": meta.get('discipline'),
                             "year": year,
                             "university": meta.get('university'),
-                            "hash": thesis_id if item_path.endswith(".pdf") else file_hash,
+                            "hash": file_hash or thesis_id,
                             "theme_silo": theme_slug
                         })
                 else:
@@ -221,6 +222,8 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
                     for doc in doc_list:
                         doc.metadata["theme_silo"] = theme_slug
                         doc.metadata["id_these"] = thesis_id
+                        if file_hash:
+                            doc.metadata["hash"] = file_hash
                 
                 documents.extend(doc_list)
             
@@ -228,6 +231,6 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
                 await ingestor.run_ingestion(documents)
                 logger.info(f"Silo {theme_slug} ingéré avec succès.")
             else:
-                logger.warning(f"Aucun document trouvé dans {theme_folder}")
+                logger.warning(f"Aucun document trouvé dans {theme_ref_folder}")
         except Exception as e:
             logger.error(f"Erreur lors de l'ingestion du silo {theme_slug} : {e}")
