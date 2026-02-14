@@ -19,7 +19,7 @@ def cleanup():
         try:
             # Buckets autorisés (définis dans le Sprint Plan ou Config)
             # On garde le bucket principal et les silos thématiques connus
-            allowed_buckets = [client.bucket, "theses-ia", "theses-agriculture", "theses-data", "quarantine"]
+            allowed_buckets = [client.bucket, "theses-ia", "theses-agri", "theses-agriculture", "theses-data", "quarantine"]
             
             # Normalisation des noms autorisés
             allowed_buckets = [b.strip("/") for b in allowed_buckets if b]
