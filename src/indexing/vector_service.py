@@ -28,8 +28,11 @@ class VectorService:
             qdrant_url = os.getenv("QDRANT_URL")
             if qdrant_url:
                 logger.info(f"Utilisation du serveur Qdrant à {qdrant_url}")
-                self.client = QdrantClient(url=qdrant_url)
-                self.aclient = AsyncQdrantClient(url=qdrant_url)
+                # Migration gRPC (PBI-022)
+                # Si l'URL contient un port (ex: :6333), on tente de passer en gRPC sur 6334
+                # Sinon on utilise prefer_grpc=True
+                self.client = QdrantClient(url=qdrant_url, prefer_grpc=True)
+                self.aclient = AsyncQdrantClient(url=qdrant_url, prefer_grpc=True)
             elif self.storage_path == ":memory:":
                 logger.info("Utilisation de Qdrant en mémoire")
                 self.client = QdrantClient(":memory:")
@@ -71,9 +74,22 @@ class VectorService:
                 collections = await self.aclient.get_collections()
                 collection_names = [c.name for c in collections.collections]
                 if collection_name not in collection_names:
+                    # Durcissement Qdrant (PBI-022)
+                    # - scalar_quantization: Int8
+                    # - on_disk: true pour les vecteurs
                     await self.aclient.create_collection(
                         collection_name=collection_name,
-                        vectors_config=rest.VectorParams(size=vector_size, distance=rest.Distance.COSINE),
+                        vectors_config=rest.VectorParams(
+                            size=vector_size, 
+                            distance=rest.Distance.COSINE,
+                            on_disk=True
+                        ),
+                        quantization_config=rest.ScalarQuantization(
+                            scalar=rest.ScalarQuantizationConfig(
+                                type=rest.ScalarType.INT8,
+                                always_ram=False,
+                            ),
+                        ),
                     )
             except Exception as e:
                 logger.error(f"Erreur async lors de la création de collection : {e}")
@@ -83,9 +99,20 @@ class VectorService:
                     collections = self.client.get_collections()
                     collection_names = [c.name for c in collections.collections]
                     if collection_name not in collection_names:
+                        # Durcissement Qdrant (PBI-022)
                         self.client.create_collection(
                             collection_name=collection_name,
-                            vectors_config=rest.VectorParams(size=vector_size, distance=rest.Distance.COSINE),
+                            vectors_config=rest.VectorParams(
+                                size=vector_size, 
+                                distance=rest.Distance.COSINE,
+                                on_disk=True
+                            ),
+                            quantization_config=rest.ScalarQuantization(
+                                scalar=rest.ScalarQuantizationConfig(
+                                    type=rest.ScalarType.INT8,
+                                    always_ram=False,
+                                ),
+                            ),
                         )
                 await asyncio.to_thread(_create)
             except Exception as e:
