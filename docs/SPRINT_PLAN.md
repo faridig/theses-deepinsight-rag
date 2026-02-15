@@ -1,61 +1,50 @@
-# SPRINT PLAN N°12
+# SPRINT PLAN N°13
 
-**Sprint Goal** : Assainir l'infrastructure et peupler le système avec des données réelles multi-domaines pour valider l'isolation des collections.
-**Statut** : PLANNING
+**Sprint Goal** : Durcir l'infrastructure vectorielle et automatiser l'audit de qualité pour garantir un système haute performance et sans hallucinations.
 
----
-
-## 🧹 PBI-026 : Hygiène de l'Infrastructure (Cleanup)
-**Priorité** : Haute | **Estimation** : S
-
-**User Story** : "En tant qu'administrateur, je veux supprimer les données temporaires et les buckets orphelins pour libérer de l'espace et éviter les confusions."
-
-**Guide Technique (Lead-Dev)** :
-- Créer un script de maintenance `scripts/cleanup_infra.py`.
-- Supprimer tous les buckets MinIO sauf ceux explicitement définis dans la config (ex: `theses-ia`, `theses-agri`).
-- Vider le dossier local `data/` après s'être assuré que les fichiers sont bien persistés dans MinIO.
-
-**Critères d'Acceptation (CA)** :
-- [x] Après exécution, `mc ls local` (MinIO CLI) ne montre que les buckets utiles.
-- [x] Le dossier local `data/` est vide.
+**Statut** : EN COURS
 
 ---
 
-## 🚀 PBI-027 : Seeding & Validation Proactive
+## 🏗️ PBI-022 : Durcissement Qdrant (Migration Production)
 **Priorité** : Haute | **Estimation** : M
 
-**User Story** : "En tant que chercheur, je veux m'assurer que seules les thèses valides et enrichies sont indexées pour garantir la qualité des réponses."
+**User Story** : "En tant qu'administrateur, je veux optimiser le stockage et la communication avec Qdrant pour garantir des performances constantes malgré l'augmentation du volume de thèses."
 
 **Guide Technique (Lead-Dev)** :
-- **Validation** : Implementer un `PDFValidator` (taille > 10Ko, test ouverture `PyMuPDF`).
-- **Enrichissement** : Extraire systématiquement l'**année de soutenance** et l'**université** depuis les métadonnées theses.fr pour chaque `Document`.
-- **Action sur Erreur** : Loguer les URLs corrompues, écarter les fichiers vides, et déplacer les suspects en bucket `quarantine`.
+- **Protocole** : Migrer la connexion client du mode REST (port 6333) vers **gRPC** (port 6334).
+- **Quantification** : Activer la `scalar_quantization` (Int8) lors de la création ou de la mise à jour des collections pour réduire l'usage RAM.
+- **Stockage** : Configurer `on_disk: true` pour les vecteurs afin de préserver la mémoire vive.
+- **Vérification** : Comparer la latence d'une recherche Multi-Query avant/après.
 
 **Critères d'Acceptation (CA)** :
-- [ ] 50 thèses valides par domaine (IA, Agri, Bio) indexées.
-- [x] Les métadonnées `year` et `university` sont présentes sur chaque Node dans Qdrant.
+- [ ] La communication s'effectue via gRPC (vérifiable dans les logs).
+- [ ] L'usage RAM par point indexé est réduit d'au moins 50% (mesure via Dashboard Health).
+- [ ] Les recherches vectorielles restent précises (pas de dégradation visible du Recall).
 
 ---
 
-## 🛡️ PBI-028 : Hygiène des Données & Dashboard
-**Priorité** : Moyenne | **Estimation** : S
+## 📊 PBI-013 : Nightly Audit Ragas (Qualité & Fiabilité)
+**Priorité** : Haute | **Estimation** : L
 
-**User Story** : "En tant qu'administrateur, je veux éviter de stocker plusieurs fois la même thèse et avoir une vue claire sur l'état de mes données."
+**User Story** : "En tant qu'administrateur, je veux mesurer automatiquement la véracité des réponses pour identifier et corriger les potentielles hallucinations."
 
 **Guide Technique (Lead-Dev)** :
-- **Dédoublonnage** : Calculer un Hash SHA-256 pour chaque PDF. Utiliser ce Hash comme ID dans MinIO et comme métadonnée dans Qdrant. Si le Hash existe déjà, ignorer le téléchargement/indexation.
-- **Dashboard de Santé** : Créer une commande `python manage.py health` affichant :
-    - Volume par collection (Nb docs / Taille Mo).
-    - État de la Quarantaine.
-    - Top 5 des universités les plus représentées.
+- **Pipeline** : Créer un script `scripts/audit_quality.py` utilisant le framework **Ragas**.
+- **Dataset** : Extraire un échantillon de 20 traces depuis Arize Phoenix (via l'API locale).
+- **Métriques** : Calculer `faithfulness` (fidélité), `answer_relevancy` (pertinence) et `context_precision`.
+- **Reporting** : 
+    - Générer un rapport Markdown dans `docs/AUDITS/audit_YYYY-MM-DD.md`.
+    - Envoyer les scores vers Arize Phoenix pour visualisation graphique.
 
 **Critères d'Acceptation (CA)** :
-- [x] Une thèse téléchargée deux fois (via deux thèmes différents) n'est stockée qu'une seule fois.
-- [x] La commande `health` retourne un tableau récapitulatif propre.
+- [ ] Un audit peut être lancé via une simple commande CLI.
+- [ ] Un rapport Markdown détaillé est généré après chaque exécution.
+- [ ] Les scores Ragas sont visibles dans l'interface locale de Phoenix (localhost:6006).
 
 ---
 
 ## 🏁 PASSAGE DE RELAIS
-Le Lead-Dev doit commencer par le nettoyage (PBI-026) pour partir sur une base saine avant de lancer les téléchargements massifs.
+L'ordre recommandé est de traiter le **PBI-022** en premier pour s'assurer que l'audit (PBI-013) s'exécute sur l'infrastructure finale optimisée.
 
 **PLANNING VALIDÉ. À TOI LEAD-DEV.**
