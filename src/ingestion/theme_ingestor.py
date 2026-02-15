@@ -5,6 +5,7 @@ from src.ingestion.theses_client import ThesesClient
 from src.ingestion.async_ingestor import AsyncIngestor
 from src.indexing.vector_service import VectorService
 from src.utils.pdf_validator import PDFValidator
+from src.config import normalize_theme
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
     Utilise S3 (MinIO) pour le stockage si configuré.
     """
     # 1. Initialisation
-    slug_theme = theme_name.lower().replace(" ", "-")
+    slug_theme = normalize_theme(theme_name)
     collection_name = f"theses-{slug_theme}"
     
     client = ThesesClient() # Utilise les ENV par défaut pour S3 (PBI-026)
@@ -41,9 +42,12 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
     documents = []
     for meta in theses_metadata:
         try:
-            # Téléchargement vers S3 ou local selon configuration (PBI-026)
-            pdf_path = client.download_pdf(meta['id'], meta['urlDocument'], theme=slug_theme)
-            if pdf_path:
+            # Téléchargement vers S3 ou local avec Dédoublonnage Hash (PBI-028)
+            download_info = client.download_pdf(meta['id'], meta['urlDocument'], theme=slug_theme)
+            if download_info:
+                pdf_path = download_info["path"]
+                file_hash = download_info["hash"]
+                
                 # Validation Proactive (PBI-027)
                 if not PDFValidator.validate(pdf_path, fs=client.fs):
                     logger.warning(f"Thèse {meta['id']} invalide ou corrompue (URL: {meta['urlDocument']}). Mise en quarantaine.")
@@ -68,7 +72,7 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
                     logger.warning(f"Impossible de lire le PDF {pdf_path}: {reader_error}")
                     continue
                 
-                # Enrichissement des métadonnées (PBI-025 & PBI-027)
+                # Enrichissement des métadonnées (PBI-025, PBI-027, PBI-028)
                 date_soutenance = meta.get('dateSoutenance')
                 year = "Inconnue"
                 if date_soutenance:
@@ -85,9 +89,10 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
                         "titre": meta.get('titre'),
                         "auteur": ", ".join(meta.get('auteurs', [])),
                         "discipline": meta.get('discipline'),
-                        "year": year, # PBI-027
-                        "university": meta.get('university'), # PBI-027
-                        "theme": theme_name, # Métadonnée thématique
+                        "year": year, 
+                        "university": meta.get('university'),
+                        "hash": file_hash, # PBI-028
+                        "theme": slug_theme, # Review Fix: Use canonical theme name
                         "slug": slug_theme
                     })
                 documents.extend(doc_list)
@@ -133,8 +138,15 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
 
     # 2. Orchestration de l'Ingestion par Silo (PBI-027)
     for theme_slug in themes:
+        if theme_slug in ["pdfs", "shared", "quarantine"]:
+            continue
+            
         collection_name = f"theses-{theme_slug}"
-        theme_folder = f"{bucket}/{theme_slug}"
+        # On cherche maintenant dans le dossier themes/ (PBI-028)
+        theme_ref_folder = f"{bucket}/themes/{theme_slug}"
+        if not client.fs.exists(theme_ref_folder):
+            # Fallback sur l'ancienne structure si themes/ n'existe pas encore
+            theme_ref_folder = f"{bucket}/{theme_slug}"
         
         logger.info(f"Démarrage de l'ingestion pour le silo : {theme_slug}")
         
@@ -149,29 +161,39 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
         
         # 3. Chargement siloté (SimpleDirectoryReader sur préfixe spécifique)
         try:
-            # Récupération des fichiers individuels pour enrichissement par ID (Review Fix)
-            files = client.fs.ls(theme_folder)
+            # Récupération des fichiers de référence (PBI-028) ou PDFs (Legacy)
+            items = client.fs.ls(theme_ref_folder)
             documents = []
             
-            for file_path in files:
-                if not file_path.lower().endswith(".pdf"):
+            for item_path in items:
+                if item_path.lower().endswith(".ref"):
+                    # Nouvelle structure : item_path est un fichier .ref contenant le hash
+                    thesis_id = os.path.basename(item_path).replace(".ref", "")
+                    with client.fs.open(item_path, "r") as f:
+                        file_hash = f.read().strip()
+                    pdf_path = f"{bucket}/pdfs/{file_hash}.pdf"
+                elif item_path.lower().endswith(".pdf"):
+                    # Ancienne structure : item_path est le PDF lui-même
+                    pdf_path = item_path
+                    thesis_id = os.path.basename(item_path).replace(".pdf", "")
+                    file_hash = None
+                else:
                     continue
                 
                 # Validation Proactive
-                if not PDFValidator.validate(file_path, fs=client.fs):
-                    logger.warning(f"Fichier S3 {file_path} invalide. Quarantaine.")
+                if not PDFValidator.validate(pdf_path, fs=client.fs):
+                    logger.warning(f"Fichier S3 {pdf_path} invalide. Quarantaine.")
                     quarantine_dir = "quarantine"
                     if not client.fs.exists(quarantine_dir):
                         client.fs.makedirs(quarantine_dir)
-                    client.fs.mv(file_path, f"{quarantine_dir}/{os.path.basename(file_path)}")
+                    client.fs.mv(pdf_path, f"{quarantine_dir}/{os.path.basename(pdf_path)}")
                     continue
                 
                 # Chargement
-                reader = SimpleDirectoryReader(input_files=[file_path], fs=client.fs)
+                reader = SimpleDirectoryReader(input_files=[pdf_path], fs=client.fs)
                 doc_list = reader.load_data()
                 
-                # Extraction ID du nom de fichier (ex: 2017REN1G007.pdf)
-                thesis_id = os.path.basename(file_path).replace(".pdf", "")
+                # Extraction Métadonnées via API (Review Fix Round 3)
                 meta = client.get_by_id(thesis_id)
                 
                 if meta:
@@ -193,6 +215,7 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
                             "discipline": meta.get('discipline'),
                             "year": year,
                             "university": meta.get('university'),
+                            "hash": file_hash or thesis_id,
                             "theme_silo": theme_slug
                         })
                 else:
@@ -200,6 +223,8 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
                     for doc in doc_list:
                         doc.metadata["theme_silo"] = theme_slug
                         doc.metadata["id_these"] = thesis_id
+                        if file_hash:
+                            doc.metadata["hash"] = file_hash
                 
                 documents.extend(doc_list)
             
@@ -207,6 +232,6 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
                 await ingestor.run_ingestion(documents)
                 logger.info(f"Silo {theme_slug} ingéré avec succès.")
             else:
-                logger.warning(f"Aucun document trouvé dans {theme_folder}")
+                logger.warning(f"Aucun document trouvé dans {theme_ref_folder}")
         except Exception as e:
             logger.error(f"Erreur lors de l'ingestion du silo {theme_slug} : {e}")

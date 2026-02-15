@@ -51,10 +51,11 @@ class TestThesesClient(unittest.TestCase):
         mock_response.content = b"%PDF-1.4 mock content"
         mock_get.return_value = mock_response
 
-        path = self.client.download_pdf("2023PA010001", "https://www.theses.fr/2023PA010001/document")
+        result = self.client.download_pdf("2023PA010001", "https://www.theses.fr/2023PA010001/document")
         
-        self.assertIsNotNone(path)
-        if path:
+        self.assertIsNotNone(result)
+        if result:
+            path = result["path"]
             self.assertTrue(os.path.exists(path))
             with open(path, "rb") as f:
                 self.assertEqual(f.read(), b"%PDF-1.4 mock content")

@@ -50,8 +50,8 @@
     - Top 5 des universités les plus représentées.
 
 **Critères d'Acceptation (CA)** :
-- [ ] Une thèse téléchargée deux fois (via deux thèmes différents) n'est stockée qu'une seule fois.
-- [ ] La commande `health` retourne un tableau récapitulatif propre.
+- [x] Une thèse téléchargée deux fois (via deux thèmes différents) n'est stockée qu'une seule fois.
+- [x] La commande `health` retourne un tableau récapitulatif propre.
 
 ---
 

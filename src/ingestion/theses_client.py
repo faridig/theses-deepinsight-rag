@@ -1,6 +1,7 @@
 import httpx
 import os
 import logging
+import hashlib
 from typing import List, Dict, Optional, Any
 from pathlib import Path
 from s3fs import S3FileSystem
@@ -149,8 +150,9 @@ class ThesesClient:
                 
         return all_results
 
-    def download_pdf(self, thesis_id: str, download_url: str, theme: Optional[str] = None) -> Optional[str]:
+    def download_pdf(self, thesis_id: str, download_url: str, theme: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Downloads a PDF document for a given thesis ID.
+        Uses SHA-256 for dedup and storage (PBI-028).
 
         Args:
             thesis_id (str): The unique ID of the thesis.
@@ -158,25 +160,12 @@ class ThesesClient:
             theme (Optional[str]): Optional theme for organization (PBI-026).
 
         Returns:
-            Optional[str]: The path (local or S3) to the downloaded file if successful, None otherwise.
+            Optional[Dict[str, Any]]: A dictionary with 'path' and 'hash' if successful, None otherwise.
         """
         if not download_url:
             logger.warning(f"No download URL provided for thesis {thesis_id}")
             return None
 
-        if self.fs and self.bucket:
-            if theme:
-                file_path = f"{self.bucket}/{theme}/{thesis_id}.pdf"
-            else:
-                file_path = f"{self.bucket}/{thesis_id}.pdf"
-        else:
-            if theme:
-                target_dir = Path(self.data_dir) / theme
-                os.makedirs(target_dir, exist_ok=True)
-                file_path = str(target_dir / f"{thesis_id}.pdf")
-            else:
-                file_path = str(Path(self.data_dir) / f"{thesis_id}.pdf")
-        
         try:
             with httpx.Client(headers=self.headers, timeout=30.0, follow_redirects=True) as client:
                 response = client.get(download_url)
@@ -185,21 +174,53 @@ class ThesesClient:
                     return None
                 response.raise_for_status()
                 
-                if self.fs:
-                    # Open with 'wb' as requested in PBI-026
-                    with self.fs.open(file_path, "wb") as f:
-                        f.write(response.content)
-                else:
-                    with open(file_path, "wb") as f:
-                        f.write(response.content)
+                # Calculate SHA-256 Hash (PBI-028)
+                file_hash = hashlib.sha256(response.content).hexdigest()
                 
-                logger.info(f"Successfully downloaded PDF for {thesis_id} to {file_path}")
-                return file_path
+                if self.fs and self.bucket:
+                    # Storage path based on Hash (PBI-028)
+                    file_path = f"{self.bucket}/pdfs/{file_hash}.pdf"
+                    
+                    # Dedup: check if exists
+                    if not self.fs.exists(file_path):
+                        with self.fs.open(file_path, "wb") as f:
+                            f.write(response.content)
+                        logger.info(f"Successfully downloaded PDF for {thesis_id} to {file_path}")
+                    else:
+                        logger.info(f"PDF already exists for {thesis_id} (hash: {file_hash}). Skipping upload.")
+                    
+                    # Store a reference for the theme (for orchestration)
+                    if theme:
+                        ref_path = f"{self.bucket}/themes/{theme}/{thesis_id}.ref"
+                        if not self.fs.exists(ref_path):
+                            with self.fs.open(ref_path, "w") as f:
+                                f.write(file_hash)
+                else:
+                    # Local storage with Hash (PBI-028)
+                    pdf_dir = Path(self.data_dir) / "pdfs"
+                    pdf_dir.mkdir(parents=True, exist_ok=True)
+                    file_path = str(pdf_dir / f"{file_hash}.pdf")
+                    
+                    if not os.path.exists(file_path):
+                        with open(file_path, "wb") as f:
+                            f.write(response.content)
+                        logger.info(f"Successfully downloaded PDF for {thesis_id} to {file_path}")
+                    else:
+                        logger.info(f"PDF already exists (hash: {file_hash}).")
+
+                    if theme:
+                        ref_dir = Path(self.data_dir) / "themes" / theme
+                        ref_dir.mkdir(parents=True, exist_ok=True)
+                        ref_path = str(ref_dir / f"{thesis_id}.ref")
+                        with open(ref_path, "w") as f:
+                            f.write(file_hash)
+                
+                return {"path": file_path, "hash": file_hash}
         except httpx.HTTPError as e:
             logger.error(f"Error downloading PDF for {thesis_id} from {download_url}: {e}")
             return None
         except Exception as e:
-            logger.error(f"Error saving PDF for {thesis_id} to {file_path}: {e}")
+            logger.error(f"Error saving PDF for {thesis_id}: {e}")
             return None
 
     def _extract_first(self, value: Any) -> Optional[str]:

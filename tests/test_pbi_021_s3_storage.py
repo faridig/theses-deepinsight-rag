@@ -32,9 +32,10 @@ class TestThesesClientS3(unittest.TestCase):
         thesis_id = "2023STRAB011"
         url = f"https://theses.fr/{thesis_id}/document"
         
-        s3_path = self.client.download_pdf(thesis_id, url)
+        result = self.client.download_pdf(thesis_id, url)
         
-        self.assertIsNotNone(s3_path)
+        self.assertIsNotNone(result)
+        s3_path = result["path"]
         self.assertTrue(s3_path.startswith(self.bucket))
         self.assertTrue(self.fs.exists(s3_path))
         

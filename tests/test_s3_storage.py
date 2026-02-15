@@ -62,13 +62,22 @@ async def test_s3_download_mock(s3_config):
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        path = client.download_pdf(test_id, test_url, theme="test-theme")
+        import hashlib
+        expected_hash = hashlib.sha256(test_content).hexdigest()
+
+        result = client.download_pdf(test_id, test_url, theme="test-theme")
+        path = result["path"]
         
-        assert path == f"{s3_config['bucket']}/test-theme/{test_id}.pdf"
+        assert path == f"{s3_config['bucket']}/pdfs/{expected_hash}.pdf"
         assert client.fs.exists(path)
+        
+        # Vérification du fichier de référence (PBI-028)
+        ref_path = f"{s3_config['bucket']}/themes/test-theme/{test_id}.ref"
+        assert client.fs.exists(ref_path)
         
         with client.fs.open(path, "rb") as f:
             assert f.read() == test_content
         
         # Cleanup
         client.fs.rm(path)
+        client.fs.rm(ref_path)
