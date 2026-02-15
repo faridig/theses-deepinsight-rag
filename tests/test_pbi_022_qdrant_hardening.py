@@ -2,7 +2,6 @@ import pytest
 import os
 import asyncio
 from src.indexing.vector_service import VectorService
-from qdrant_client import QdrantClient, AsyncQdrantClient
 from qdrant_client.http import models as rest
 
 @pytest.mark.asyncio
@@ -27,7 +26,7 @@ async def test_qdrant_hardening_configuration():
         if service.aclient:
             try:
                 await service.aclient.delete_collection(collection_name)
-            except:
+            except Exception:
                 pass
         
         # Création de la collection
@@ -50,7 +49,7 @@ async def test_qdrant_hardening_configuration():
         if service.aclient:
             try:
                 await service.aclient.delete_collection(collection_name)
-            except:
+            except Exception:
                 pass
         service.close()
 

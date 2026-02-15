@@ -1,7 +1,6 @@
 import os
 import logging
 from datetime import datetime
-import pandas as pd
 from datasets import Dataset
 import phoenix as px
 from ragas import evaluate
@@ -10,7 +9,6 @@ from ragas.metrics import (
     answer_relevancy,
     context_precision,
 )
-from llama_index.core import Settings
 from src.config import setup_settings
 
 # Configuration des logs
@@ -58,7 +56,7 @@ def run_audit():
                                         context.append(doc.get('document.content', ''))
                                     else:
                                         context.append(str(doc))
-                    except:
+                    except Exception:
                         pass
                 
                 if query and response and context:
@@ -135,7 +133,7 @@ def run_audit():
                     f.write(f"- **Answer Relevancy**: {row.get('answer_relevancy', 'N/A')}\n")
                     f.write(f"- **Context Precision**: {row.get('context_precision', 'N/A')}\n")
                     f.write("\n")
-            except:
+            except Exception:
                 f.write("Détails non disponibles sous forme de tableau.\n")
 
         logger.info(f"Rapport généré : {report_path}")

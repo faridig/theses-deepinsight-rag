@@ -1,5 +1,4 @@
 import phoenix as px
-import pandas as pd
 from phoenix.trace.dsl import SpanQuery
 
 client = px.Client(endpoint="http://localhost:6006")
