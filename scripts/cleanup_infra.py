@@ -18,26 +18,33 @@ def cleanup():
     client = ThesesClient()
     
     # 1. Liste Blanche Canonique (PBI-026/Review)
-    # On génère la liste des thèmes autorisés à partir des thèmes canoniques
+    # On génère la liste des thèmes autorisés à partir des thèmes canoniques uniquement (PBI-026 Review Fix)
     allowed_themes = set(CANONICAL_THEMES.values())
-    allowed_buckets = [client.bucket, "theses-data", "quarantine"]
-    allowed_buckets.extend([f"theses-{t}" for t in allowed_themes])
     
-    # Normalisation des noms autorisés
-    allowed_buckets = [b.strip("/") for b in allowed_buckets if b]
-    allowed_collections = [b for b in allowed_buckets if b.startswith("theses-")]
+    # Construction de la liste blanche des buckets autorisés
+    # On ne met QUE les thèmes canoniques, theses-data et quarantine.
+    # theses-agri sera donc supprimé au profit de theses-agriculture.
+    allowed_buckets = {"theses-data", "quarantine"}
+    if client.bucket:
+        allowed_buckets.add(client.bucket.strip("/"))
+    
+    for t in allowed_themes:
+        allowed_buckets.add(f"theses-{t}")
+    
+    logger.info(f"Liste blanche des ressources : {allowed_buckets}")
     
     # 2. Cleanup MinIO buckets
     if client.fs:
         try:
             logger.info("Scanning MinIO buckets...")
+            # On liste la racine du stockage S3
             buckets = client.fs.ls("", detail=False)
-            for bucket in buckets:
-                bucket_name = bucket.strip("/")
+            for bucket_path in buckets:
+                bucket_name = bucket_path.strip("/")
                 if bucket_name and bucket_name not in allowed_buckets:
-                    logger.info(f"Suppression du bucket orphelin : {bucket_name}")
+                    logger.info(f"Suppression du bucket orphelin ou non-canonique : {bucket_name}")
                     try:
-                        client.fs.rm(bucket, recursive=True)
+                        client.fs.rm(bucket_path, recursive=True)
                     except Exception as rm_err:
                         logger.error(f"Impossible de supprimer {bucket_name}: {rm_err}")
                 else:
@@ -48,29 +55,36 @@ def cleanup():
         logger.warning("MinIO non configuré, saut du nettoyage des buckets.")
 
     # 3. Cleanup Qdrant Collections (Review Fix)
+    # On définit explicitement les collections autorisées (celles qui commencent par theses- dans la liste blanche)
+    allowed_collections = [b for b in allowed_buckets if b.startswith("theses-")]
+    
     try:
-        qdrant_url = os.getenv("QDRANT_URL")
+        qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
         storage_path = "./storage/qdrant"
         
-        if qdrant_url:
+        # On essaie d'abord via l'URL (Remote) puis en local
+        q_client = None
+        try:
             q_client = QdrantClient(url=qdrant_url)
-            logger.info(f"Scanning Qdrant collections (Remote: {qdrant_url})...")
-        elif os.path.exists(storage_path):
-            q_client = QdrantClient(path=storage_path)
-            logger.info(f"Scanning Qdrant collections (Local: {storage_path})...")
-        else:
-            q_client = None
-            logger.warning("Qdrant non trouvé (ni URL ni stockage local).")
-
+            # Test de connexion simple
+            q_client.get_collections()
+            logger.info(f"Connecté à Qdrant (Remote: {qdrant_url})")
+        except Exception:
+            if os.path.exists(storage_path):
+                q_client = QdrantClient(path=storage_path)
+                logger.info(f"Connecté à Qdrant (Local: {storage_path})")
+        
         if q_client:
             collections = q_client.get_collections().collections
             for col in collections:
                 if col.name.startswith("theses-") and col.name not in allowed_collections:
-                    logger.info(f"Suppression de la collection Qdrant orpheline : {col.name}")
+                    logger.info(f"Suppression de la collection Qdrant orpheline ou non-canonique : {col.name}")
                     q_client.delete_collection(col.name)
                 else:
                     logger.info(f"Collection Qdrant conservée : {col.name}")
             q_client.close()
+        else:
+            logger.warning("Impossible de contacter Qdrant pour le nettoyage.")
     except Exception as e:
         logger.error(f"Erreur lors du nettoyage Qdrant : {e}")
 

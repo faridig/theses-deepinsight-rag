@@ -92,7 +92,7 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
                         "year": year, 
                         "university": meta.get('university'),
                         "hash": file_hash, # PBI-028
-                        "theme": theme_name,
+                        "theme": slug_theme, # Review Fix: Use canonical theme name
                         "slug": slug_theme
                     })
                 documents.extend(doc_list)
