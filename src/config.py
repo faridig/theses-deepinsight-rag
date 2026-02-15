@@ -12,6 +12,32 @@ logger = logging.getLogger(__name__)
 # Silence technique (PBI-027)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+# Normalisation des thèmes (PBI-026/Review)
+CANONICAL_THEMES = {
+    "ia": "intelligence-artificielle",
+    "ai": "intelligence-artificielle",
+    "intelligence artificielle": "intelligence-artificielle",
+    "agri": "agriculture",
+    "agriculture": "agriculture",
+    "bio": "biologie",
+    "biologie": "biologie",
+    "medecine": "sante",
+    "santé": "sante",
+    "sante": "sante"
+}
+
+def normalize_theme(theme_name: str) -> str:
+    """
+    Retourne le nom canonique d'un thème ou un slug standardisé.
+    """
+    raw_name = theme_name.lower().strip()
+    # 1. Vérifier si c'est un alias connu
+    if raw_name in CANONICAL_THEMES:
+        return CANONICAL_THEMES[raw_name]
+    
+    # 2. Sinon, retourner un slug standardisé
+    return raw_name.replace(" ", "-")
+
 def setup_settings():
     """
     Initialise les paramètres globaux de LlamaIndex (LLM et Embeddings).

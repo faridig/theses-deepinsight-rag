@@ -5,6 +5,7 @@ from src.ingestion.theses_client import ThesesClient
 from src.ingestion.async_ingestor import AsyncIngestor
 from src.indexing.vector_service import VectorService
 from src.utils.pdf_validator import PDFValidator
+from src.config import normalize_theme
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
     Utilise S3 (MinIO) pour le stockage si configuré.
     """
     # 1. Initialisation
-    slug_theme = theme_name.lower().replace(" ", "-")
+    slug_theme = normalize_theme(theme_name)
     collection_name = f"theses-{slug_theme}"
     
     client = ThesesClient() # Utilise les ENV par défaut pour S3 (PBI-026)
