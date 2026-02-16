@@ -22,10 +22,15 @@ class TestDiversityDocling:
         ]
         
         # On veut jusqu'à 2 extraits par document
-        processor = DiversityPostprocessor(target_top_n=3)
+        processor = DiversityPostprocessor(target_top_n=4)  # Augmenté pour voir tous les nodes
         filtered_nodes = processor._postprocess_nodes(nodes)
         
-        assert len(filtered_nodes) == 3  # 2 de A, 1 de B
+        # Debug: afficher ce qu'on obtient
+        print(f"Nombre de nodes filtrés: {len(filtered_nodes)}")
+        for i, n in enumerate(filtered_nodes):
+            print(f"Node {i}: {n.node.metadata['file_name']} - {n.node.get_content()} - score: {n.score}")
+        
+        assert len(filtered_nodes) == 3  # 2 de A, 1 de B (le troisième A est rejeté)
         file_names = [n.node.metadata["file_name"] for n in filtered_nodes]
         assert file_names.count("these_a.pdf") == 2  # 2 extraits de these_a.pdf
         assert "these_b.pdf" in file_names

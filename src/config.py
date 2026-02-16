@@ -19,24 +19,34 @@ def setup_phoenix_instrumentation():
         from opentelemetry import trace
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk import trace as trace_sdk
-        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
         
-        # Configuration de l'export OTLP vers Phoenix (port par défaut: 6006)
-        # Note: Phoenix doit être lancé sur http://localhost:6006
-        endpoint = "http://localhost:6006/v1/traces"
-        
-        # Création du tracer provider avec export OTLP
-        tracer_provider = trace_sdk.TracerProvider()
-        
-        try:
-            span_exporter = OTLPSpanExporter(endpoint=endpoint)
-            span_processor = SimpleSpanProcessor(span_exporter=span_exporter)
+        # En mode test, on utilise un exporter console pour éviter les erreurs de connexion
+        if os.getenv("IS_TESTING") == "1" or os.getenv("PYTEST_CURRENT_TEST"):
+            logger.info("Mode test détecté - utilisation de ConsoleSpanExporter au lieu d'OTLP")
+            tracer_provider = trace_sdk.TracerProvider()
+            # Exporter vers console pour le débogage en mode test
+            console_exporter = ConsoleSpanExporter()
+            span_processor = SimpleSpanProcessor(console_exporter)
             tracer_provider.add_span_processor(span_processor=span_processor)
             trace.set_tracer_provider(tracer_provider)
-            logger.info(f"Export OTLP configuré vers {endpoint}")
-        except Exception as export_error:
-            logger.warning(f"Impossible de configurer l'export OTLP : {export_error}. "
-                          "Les traces seront générées localement mais non exportées.")
+        else:
+            # Configuration de l'export OTLP vers Phoenix (port par défaut: 6006)
+            # Note: Phoenix doit être lancé sur http://localhost:6006
+            endpoint = "http://localhost:6006/v1/traces"
+            
+            # Création du tracer provider avec export OTLP
+            tracer_provider = trace_sdk.TracerProvider()
+            
+            try:
+                span_exporter = OTLPSpanExporter(endpoint=endpoint)
+                span_processor = SimpleSpanProcessor(span_exporter=span_exporter)
+                tracer_provider.add_span_processor(span_processor=span_processor)
+                trace.set_tracer_provider(tracer_provider)
+                logger.info(f"Export OTLP configuré vers {endpoint}")
+            except Exception as export_error:
+                logger.warning(f"Impossible de configurer l'export OTLP : {export_error}. "
+                              "Les traces seront générées localement mais non exportées.")
         
         # Instrumentation de LlamaIndex
         LlamaIndexInstrumentor().instrument(tracer_provider=tracer_provider)

@@ -23,10 +23,16 @@ class TestDiversityPostprocessor:
             NodeWithScore(node=node5, score=0.6),
         ]
         
-        processor = DiversityPostprocessor(target_top_n=4)
+        processor = DiversityPostprocessor(target_top_n=5)  # Augmenté à 5 pour voir tous les nodes
         filtered_nodes = processor._postprocess_nodes(nodes)
         
+        # Debug: afficher ce qu'on obtient
+        print(f"Nombre de nodes filtrés: {len(filtered_nodes)}")
+        for i, n in enumerate(filtered_nodes):
+            print(f"Node {i}: {n.node.metadata['titre']} - {n.node.get_content()} - score: {n.score}")
+        
         # On doit avoir 4 nodes au total (2 de A, 1 de B, 1 de C)
+        # Car le troisième A est rejeté (max_per_doc=2)
         assert len(filtered_nodes) == 4
         
         # On doit avoir les 2 meilleurs de A (scores 0.9 et 0.85)
@@ -35,7 +41,7 @@ class TestDiversityPostprocessor:
         assert filtered_nodes[1].node.get_content() == "Fragment 2 Doc A"
         assert filtered_nodes[1].score == 0.85
         
-        # On doit avoir B et C
+        # On doit avoir B et C (dans un ordre quelconque)
         titles = [n.node.metadata["titre"] for n in filtered_nodes]
         assert titles.count("Thèse A") == 2  # 2 extraits de Thèse A
         assert "Thèse B" in titles
