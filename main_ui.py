@@ -3,6 +3,7 @@ import sys
 import json
 import logging
 import chainlit as cl
+import phoenix as px
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -157,6 +158,19 @@ async def main(message: cl.Message):
     # Exécution de la requête via RAG avec le thème sélectionné (PBI-036)
     response = await engine.aask(message.content, theme=theme)
     
+    # Récupération de l'ID du span Phoenix actuel (pour PBI-033/Phoenix integration)
+    # LlamaIndex stocke les IDs dans le callback manager si instrumenté
+    # On va tenter de récupérer l'ID de trace pour le lier au message Chainlit
+    # Note: En mode asynchrone, le span_id peut être récupéré via openinference
+    try:
+        from openinference.instrumentation import get_current_span
+        span = get_current_span()
+        if span and span.get_span_context().is_valid:
+            trace_id = span.get_span_context().trace_id
+            cl.user_session.set(f"trace_{response.response[:20]}", format(trace_id, '032x'))
+    except Exception:
+        pass
+
     # Préparation de la réponse (On retire la liste brute des sources car on va utiliser les éléments)
     answer_text = str(response).split("\n\nSources :")[0]
     
@@ -193,11 +207,12 @@ async def main(message: cl.Message):
         elements=elements
     ).send()
 
-# PBI-033: Boucle de Feedback Humain
+# PBI-033: Boucle de Feedback Humain (Intégration Phoenix)
 @cl.on_feedback
 async def process_feedback(feedback):
     """
-    Stockage des feedbacks utilisateurs dans data/feedbacks.json.
+    Stockage des feedbacks utilisateurs dans data/feedbacks.json 
+    ET envoi vers Arize Phoenix (PBI-033).
     """
     feedback_data = {
         "message_id": feedback.forId,
@@ -208,6 +223,26 @@ async def process_feedback(feedback):
     
     logger.info(f"Feedback reçu : {feedback_data}")
     
+    # 1. Envoi vers Arize Phoenix
+    try:
+        px_client = px.Client()
+        # On essaie de retrouver la trace liée
+        # Note: Cette partie est expérimentale sans ID de span précis, 
+        # mais Phoenix permet de loguer des évaluations globales.
+        px_client.log_evaluations(
+            px.Evaluation(
+                name="Human Feedback",
+                label=feedback.value,
+                score=1 if feedback.value == "thumbs-up" else 0,
+                explanation=feedback.comment,
+                metadata={"message_id": feedback.forId}
+            )
+        )
+        logger.info("Feedback envoyé à Arize Phoenix")
+    except Exception as e:
+        logger.warning(f"Échec de l'envoi du feedback à Phoenix : {e}")
+
+    # 2. Stockage local JSON (Sécurité)
     file_path = "data/feedbacks.json"
     os.makedirs("data", exist_ok=True)
     
