@@ -22,18 +22,25 @@ class TestDiversityDocling:
         ]
         
         # On veut jusqu'à 2 extraits par document
-        processor = DiversityPostprocessor(target_top_n=4)  # Augmenté pour voir tous les nodes
+        processor = DiversityPostprocessor(target_top_n=4)  # On veut voir tous les nodes possibles
         filtered_nodes = processor._postprocess_nodes(nodes)
         
-        # Debug: afficher ce qu'on obtient
-        print(f"Nombre de nodes filtrés: {len(filtered_nodes)}")
-        for i, n in enumerate(filtered_nodes):
-            print(f"Node {i}: {n.node.metadata['file_name']} - {n.node.get_content()} - score: {n.score}")
+        # Avec max_per_doc=2 et target_top_n=4, on devrait avoir:
+        # - 2 extraits de these_a.pdf (les 2 meilleurs: 0.9 et 0.85)
+        # - 1 extrait de these_b.pdf (0.7)
+        # Total: 3 nodes (le troisième A est rejeté)
+        assert len(filtered_nodes) == 3
         
-        assert len(filtered_nodes) == 3  # 2 de A, 1 de B (le troisième A est rejeté)
         file_names = [n.node.metadata["file_name"] for n in filtered_nodes]
         assert file_names.count("these_a.pdf") == 2  # 2 extraits de these_a.pdf
         assert "these_b.pdf" in file_names
+        
+        # Vérifier que les 2 meilleurs de A sont inclus
+        a_nodes = [n for n in filtered_nodes if n.node.metadata["file_name"] == "these_a.pdf"]
+        assert len(a_nodes) == 2
+        a_scores = [n.score for n in a_nodes]
+        assert 0.9 in a_scores  # Meilleur score de A
+        assert 0.85 in a_scores  # Deuxième meilleur score de A
 
     def test_diversity_mixed_metadata(self):
         """

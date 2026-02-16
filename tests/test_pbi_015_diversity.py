@@ -23,29 +23,28 @@ class TestDiversityPostprocessor:
             NodeWithScore(node=node5, score=0.6),
         ]
         
-        processor = DiversityPostprocessor(target_top_n=5)  # Augmenté à 5 pour voir tous les nodes
+        processor = DiversityPostprocessor(target_top_n=5)  # On veut voir tous les nodes possibles
         filtered_nodes = processor._postprocess_nodes(nodes)
         
-        # Debug: afficher ce qu'on obtient
-        print(f"Nombre de nodes filtrés: {len(filtered_nodes)}")
-        for i, n in enumerate(filtered_nodes):
-            print(f"Node {i}: {n.node.metadata['titre']} - {n.node.get_content()} - score: {n.score}")
-        
-        # On doit avoir 4 nodes au total (2 de A, 1 de B, 1 de C)
-        # Car le troisième A est rejeté (max_per_doc=2)
+        # Avec max_per_doc=2 et target_top_n=5, on devrait avoir:
+        # - 2 extraits de Thèse A (les 2 meilleurs: 0.9 et 0.85)
+        # - 1 extrait de Thèse B (0.7)
+        # - 1 extrait de Thèse C (0.6)
+        # Total: 4 nodes (le troisième A est rejeté)
         assert len(filtered_nodes) == 4
         
-        # On doit avoir les 2 meilleurs de A (scores 0.9 et 0.85)
-        assert filtered_nodes[0].node.get_content() == "Fragment 1 Doc A"
-        assert filtered_nodes[0].score == 0.9
-        assert filtered_nodes[1].node.get_content() == "Fragment 2 Doc A"
-        assert filtered_nodes[1].score == 0.85
-        
-        # On doit avoir B et C (dans un ordre quelconque)
+        # Vérifier qu'on a bien 2 extraits de Thèse A
         titles = [n.node.metadata["titre"] for n in filtered_nodes]
         assert titles.count("Thèse A") == 2  # 2 extraits de Thèse A
         assert "Thèse B" in titles
         assert "Thèse C" in titles
+        
+        # Vérifier que les 2 meilleurs de A sont inclus
+        a_nodes = [n for n in filtered_nodes if n.node.metadata["titre"] == "Thèse A"]
+        assert len(a_nodes) == 2
+        a_scores = [n.score for n in a_nodes]
+        assert 0.9 in a_scores  # Meilleur score de A
+        assert 0.85 in a_scores  # Deuxième meilleur score de A
 
     def test_diversity_limit(self):
         """

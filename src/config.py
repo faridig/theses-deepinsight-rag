@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 from dotenv import load_dotenv
 from llama_index.core import Settings
@@ -21,14 +22,18 @@ def setup_phoenix_instrumentation():
         from opentelemetry.sdk import trace as trace_sdk
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
         
-        # En mode test, on utilise un exporter console pour éviter les erreurs de connexion
-        if os.getenv("IS_TESTING") == "1" or os.getenv("PYTEST_CURRENT_TEST"):
-            logger.info("Mode test détecté - utilisation de ConsoleSpanExporter au lieu d'OTLP")
+        # Détection du mode test - plusieurs méthodes
+        is_test_mode = (
+            os.getenv("IS_TESTING") == "1" or
+            os.getenv("PYTEST_CURRENT_TEST") is not None or
+            "pytest" in sys.modules or
+            "unittest" in sys.modules
+        )
+        
+        if is_test_mode:
+            logger.info("Mode test détecté - instrumentation simplifiée sans export OTLP")
+            # En mode test, on crée un tracer provider minimal sans export
             tracer_provider = trace_sdk.TracerProvider()
-            # Exporter vers console pour le débogage en mode test
-            console_exporter = ConsoleSpanExporter()
-            span_processor = SimpleSpanProcessor(console_exporter)
-            tracer_provider.add_span_processor(span_processor=span_processor)
             trace.set_tracer_provider(tracer_provider)
         else:
             # Configuration de l'export OTLP vers Phoenix (port par défaut: 6006)
