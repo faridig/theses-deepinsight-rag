@@ -10,6 +10,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from llama_index.core import Settings
 from llama_index.core.callbacks import CallbackManager
 from chainlit.llama_index.callbacks import LlamaIndexCallbackHandler
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+
+# Initialisation globale de l'instrumentation (Audit-Fix)
+LlamaIndexInstrumentor().instrument()
 
 # Configuration du moteur RAG
 from src.generation.rag_engine import RAGEngine

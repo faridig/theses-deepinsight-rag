@@ -6,8 +6,12 @@ import llama_index.llms.openai
 import llama_index.embeddings.openai
 from llama_index.core.llms import MockLLM
 from llama_index.core.embeddings import MockEmbedding
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 
 logger = logging.getLogger(__name__)
+
+# Initialisation de l'instrumentation Phoenix (Audit-Fix)
+LlamaIndexInstrumentor().instrument()
 
 # Silence technique (PBI-027)
 logging.getLogger("httpx").setLevel(logging.WARNING)
