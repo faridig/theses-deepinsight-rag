@@ -41,48 +41,68 @@ async def start():
         themes = engine.get_available_themes()
 
         # Construction des éléments de la barre latérale
-        sidebar_elements = [
+        # Seuls les InputWidget peuvent être dans ChatSettings
+        from chainlit.input_widget import InputWidget
+        
+        sidebar_widgets: list[InputWidget] = [
             cl.input_widget.Select(
                 id="Theme",
                 label="Domaine d'étude",
-                values=themes if themes else ["default"],
+                values=themes if themes else ["Aucun thème disponible"],
                 initial_index=0
             )
         ]
 
-        # Ajout du dashboard qualité
-        dashboard_element = await get_quality_dashboard_element()
-        if dashboard_element:
-            sidebar_elements.append(dashboard_element)
-        else:
-            sidebar_elements.append(cl.Text(
-                name="📊 Dashboard Qualité",
-                content="Aucun rapport d'audit trouvé dans `docs/AUDITS/`.",
-                display="side"
-            ))
-            
-        # Ajout du lien d'observabilité
-        sidebar_elements.append(cl.Text(
-            name="Observabilité",
-            content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
-            display="side"
-        ))
-
-        # Envoi groupé des paramètres de la barre latérale
-        settings = await cl.ChatSettings(sidebar_elements).send()
+        # Envoi des paramètres de la barre latérale (uniquement les widgets interactifs)
+        settings = await cl.ChatSettings(sidebar_widgets).send()
         
         selected_theme = settings.get("Theme")
+        # Si aucun thème n'est disponible, on utilise une valeur par défaut
+        if selected_theme == "Aucun thème disponible":
+            selected_theme = None
         cl.user_session.set("theme", selected_theme)
+        
+        # Envoi des éléments d'affichage (Text) séparément
+        # Dashboard qualité
+        dashboard_element = await get_quality_dashboard_element()
+        if dashboard_element:
+            await dashboard_element.send()
+        else:
+            # Création d'un élément Text sans for_id (élément indépendant)
+            await cl.Text(
+                name="📊 Dashboard Qualité",
+                content="Aucun rapport d'audit trouvé dans `docs/AUDITS/`.",
+                display="side",
+                for_id=None
+            ).send()
+            
+        # Lien d'observabilité
+        await cl.Text(
+            name="Observabilité",
+            content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
+            display="side",
+            for_id=None
+        ).send()
         
         # Stats du thème
         stats_info = ""
         if selected_theme:
             stats = engine.get_theme_stats(selected_theme)
-            stats_info = f"\n📊 **Statistiques**: {stats.get('points_count', 0)} extraits indexés."
+            points_count = stats.get('points_count', 0)
+            status = stats.get('status', 'unknown')
+            
+            if points_count == 0:
+                if status == 'error':
+                    stats_info = f"\n⚠️ **Attention**: La collection '{selected_theme}' est inaccessible ou n'existe pas."
+                else:
+                    stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés. (Collection vide)"
+            else:
+                stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés."
 
         # Message de bienvenue (indépendant de la sidebar)
+        theme_display = selected_theme if selected_theme else "Aucun (recherche globale)"
         status_msg = cl.Message(
-            content=f"Moteur DeepInsight prêt. Thème actif : **{selected_theme}**.{stats_info}\nPosez vos questions sur les thèses."
+            content=f"Moteur DeepInsight prêt. Thème actif : **{theme_display}**.{stats_info}\nPosez vos questions sur les thèses."
         )
         await status_msg.send()
         cl.user_session.set("status_msg", status_msg)
@@ -97,18 +117,31 @@ async def setup_agent(settings):
     Mise à jour du thème lors du changement dans l'UI.
     """
     new_theme = settings.get("Theme")
+    # Si aucun thème n'est disponible, on utilise une valeur par défaut
+    if new_theme == "Aucun thème disponible":
+        new_theme = None
     cl.user_session.set("theme", new_theme)
     
     engine = cl.user_session.get("query_engine")
     stats_info = ""
     if engine and new_theme:
         stats = engine.get_theme_stats(new_theme)
-        stats_info = f"\n📊 **Statistiques**: {stats.get('points_count', 0)} extraits indexés."
+        points_count = stats.get('points_count', 0)
+        status = stats.get('status', 'unknown')
+        
+        if points_count == 0:
+            if status == 'error':
+                stats_info = f"\n⚠️ **Attention**: La collection '{new_theme}' est inaccessible ou n'existe pas."
+            else:
+                stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés. (Collection vide)"
+        else:
+            stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés."
 
     # Gestion propre de la notification de changement (PBI-Review)
     # On utilise un message éphémère ou on met à jour le dernier message de statut
     status_msg = cl.user_session.get("status_msg")
-    content = f"Domaine de recherche mis à jour : **{new_theme}**.{stats_info}"
+    theme_display = new_theme if new_theme else "Aucun (recherche globale)"
+    content = f"Domaine de recherche mis à jour : **{theme_display}**.{stats_info}"
     
     if status_msg:
         status_msg.content = content
@@ -144,7 +177,8 @@ async def get_quality_dashboard_element():
             return cl.Text(
                 name="📊 Dashboard Qualité",
                 content=f"Dernier Audit ({latest_audit}):\n\n{summary}\n\n*Crash Test = Synthétique*\n*Live = Traces réelles*",
-                display="side"
+                display="side",
+                for_id=None
             )
         else:
             logger.warning(f"Section 'Résumé des Scores Ragas' non trouvée dans {latest_audit}")
@@ -204,7 +238,8 @@ async def main(message: cl.Message):
                 cl.Text(
                     name=source_name,
                     content=f"### {title}\n**Auteur**: {author}\n\n---\n\n**Extrait**:\n{content}",
-                    display="side"
+                    display="side",
+                    for_id=None
                 )
             )
     
