@@ -72,10 +72,12 @@ async def start():
             elements.append(dashboard_element)
             
         # Message de bienvenue personnalisé avec les éléments attachés
-        await cl.Message(
+        status_msg = cl.Message(
             content=f"Moteur DeepInsight prêt. Thème actif : **{selected_theme}**.{stats_info}\nPosez vos questions sur les thèses.",
             elements=elements
-        ).send()
+        )
+        await status_msg.send()
+        cl.user_session.set("status_msg", status_msg)
         
     except Exception as e:
         logger.error(f"Erreur d'initialisation : {e}")
@@ -95,7 +97,18 @@ async def setup_agent(settings):
         stats = engine.get_theme_stats(new_theme)
         stats_info = f"\n📊 **Statistiques**: {stats.get('points_count', 0)} extraits indexés."
 
-    await cl.Message(content=f"Domaine de recherche mis à jour : **{new_theme}**.{stats_info}").send()
+    # Gestion propre de la notification de changement (PBI-Review)
+    # On utilise un message éphémère ou on met à jour le dernier message de statut
+    status_msg = cl.user_session.get("status_msg")
+    content = f"Domaine de recherche mis à jour : **{new_theme}**.{stats_info}"
+    
+    if status_msg:
+        status_msg.content = content
+        await status_msg.update()
+    else:
+        new_status_msg = cl.Message(content=content)
+        cl.user_session.set("status_msg", new_status_msg)
+        await new_status_msg.send()
 
 async def get_quality_dashboard_element():
     """

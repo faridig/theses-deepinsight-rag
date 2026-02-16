@@ -160,17 +160,25 @@ class VectorService:
         """
         Liste toutes les collections disponibles dans Qdrant,
         filtrées pour ne garder que les thèmes de thèses (PBI-035).
+        Optimisé pour le nettoyage de la pollution (PBI-Review).
         """
         try:
             collections_response = self.client.get_collections()
             all_names = [c.name for c in collections_response.collections]
             
-            # Filtrage : On garde les collections qui ne sont pas purement techniques
-            # (Ex: on pourrait exclure 'test', 'admin', etc. si elles existaient)
-            # Pour l'instant, on accepte tout ce qui ressemble à un thème normalisé
-            excluded = ["test", "default"]
-            filtered = [name for name in all_names if name not in excluded]
+            # Filtrage rigoureux (PBI-Review)
+            # On exclut les collections de test, par défaut ou techniques
+            # On ne garde que celles commençant par 'theses-'
+            filtered = [
+                name for name in all_names 
+                if name.startswith("theses-") 
+                and not any(x in name.lower() for x in ["test", "default", "tmp", "persist"])
+            ]
             
+            # Si aucune collection filtrée n'existe, on peut autoriser theses-default par sécurité
+            if not filtered and "theses-default" in all_names:
+                filtered = ["theses-default"]
+                
             return sorted(filtered)
         except Exception as e:
             logger.error(f"Erreur lors de la récupération des collections : {e}")

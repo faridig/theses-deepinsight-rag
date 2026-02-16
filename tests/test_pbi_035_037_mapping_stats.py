@@ -20,9 +20,10 @@ async def test_dynamic_collection_mapping(tmp_path, mock_settings, monkeypatch):
     
     # 1. Créer plusieurs collections
     vs = VectorService(storage_path=storage_path, collection_name="default")
-    await vs.create_collection_if_not_exists("ia-theses")
-    await vs.create_collection_if_not_exists("bio-theses")
-    await vs.create_collection_if_not_exists("test") # Devrait être filtré
+    await vs.create_collection_if_not_exists("theses-ia") # OK
+    await vs.create_collection_if_not_exists("theses-bio") # OK
+    await vs.create_collection_if_not_exists("theses-test") # Filtré (test)
+    await vs.create_collection_if_not_exists("ia-theses") # Filtré (pas theses-)
     
     # 2. Utiliser RAGEngine avec le MÊME VectorService partagé
     engine = RAGEngine(storage_path=storage_path)
@@ -30,9 +31,10 @@ async def test_dynamic_collection_mapping(tmp_path, mock_settings, monkeypatch):
     
     themes = engine.get_available_themes()
     
-    assert "ia-theses" in themes
-    assert "bio-theses" in themes
-    assert "test" not in themes 
+    assert "theses-ia" in themes
+    assert "theses-bio" in themes
+    assert "theses-test" not in themes 
+    assert "ia-theses" not in themes
     assert "default" not in themes 
     
     vs.close()
