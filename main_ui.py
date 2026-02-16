@@ -59,24 +59,28 @@ async def start():
             stats = engine.get_theme_stats(selected_theme)
             stats_info = f"\n📊 **Statistiques**: {stats.get('points_count', 0)} extraits indexés."
 
-        # Éléments de l'interface (PBI-031/032)
-        elements = [
-            cl.Text(
-                name="Observabilité",
-                content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
-                display="side"
-            )
-        ]
+        # Éléments persistants de la barre latérale (PBI-Fix visibilité)
+        obs_element = cl.Text(
+            name="Observabilité",
+            content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
+            display="side"
+        )
+        await obs_element.send()
         
-        # Dashboard Qualité
         dashboard_element = await get_quality_dashboard_element()
         if dashboard_element:
-            elements.append(dashboard_element)
+            await dashboard_element.send()
+        else:
+            # Élément par défaut si pas d'audit
+            await cl.Text(
+                name="📊 Dashboard Qualité",
+                content="Aucun rapport d'audit trouvé dans `docs/AUDITS/`.\nLancez `python scripts/audit_quality.py` pour générer un rapport.",
+                display="side"
+            ).send()
             
-        # Message de bienvenue personnalisé avec les éléments attachés
+        # Message de bienvenue
         status_msg = cl.Message(
-            content=f"Moteur DeepInsight prêt. Thème actif : **{selected_theme}**.{stats_info}\nPosez vos questions sur les thèses.",
-            elements=elements
+            content=f"Moteur DeepInsight prêt. Thème actif : **{selected_theme}**.{stats_info}\nPosez vos questions sur les thèses."
         )
         await status_msg.send()
         cl.user_session.set("status_msg", status_msg)
@@ -129,15 +133,19 @@ async def get_quality_dashboard_element():
         with open(os.path.join(audit_dir, latest_audit), "r", encoding="utf-8") as f:
             content = f.read()
             
-        # Extraction sommaire du tableau des scores
-        scores_section = "## Résumé des Scores Ragas\n\n"
-        if scores_section in content:
-            summary = content.split(scores_section)[1].split("##")[0]
+        # Extraction robuste du résumé (PBI-Fix)
+        # On cherche la section quel que soit le nombre de sauts de ligne
+        import re
+        match = re.search(r"## Résumé des Scores Ragas\s+(.*?)(?=\n##|$)", content, re.DOTALL)
+        if match:
+            summary = match.group(1).strip()
             return cl.Text(
                 name="📊 Dashboard Qualité",
                 content=f"Dernier Audit ({latest_audit}):\n\n{summary}\n\n*Crash Test = Synthétique*\n*Live = Traces réelles*",
                 display="side"
             )
+        else:
+            logger.warning(f"Section 'Résumé des Scores Ragas' non trouvée dans {latest_audit}")
     except Exception as e:
         logger.warning(f"Erreur lors de la lecture de l'audit : {e}")
         
@@ -226,19 +234,19 @@ async def process_feedback(feedback):
     # 1. Envoi vers Arize Phoenix
     try:
         px_client = px.Client()
-        # On essaie de retrouver la trace liée
-        # Note: Cette partie est expérimentale sans ID de span précis, 
-        # mais Phoenix permet de loguer des évaluations globales.
+        # Envoi de l'évaluation à Phoenix (Doit être une liste)
         px_client.log_evaluations(
-            px.Evaluation(
-                name="Human Feedback",
-                label=feedback.value,
-                score=1 if feedback.value == "thumbs-up" else 0,
-                explanation=feedback.comment,
-                metadata={"message_id": feedback.forId}
-            )
+            [
+                px.Evaluation(
+                    name="Human Feedback",
+                    label=feedback.value,
+                    score=1 if feedback.value == "thumbs-up" else 0,
+                    explanation=feedback.comment or "No comment provided",
+                    metadata={"message_id": feedback.forId}
+                )
+            ]
         )
-        logger.info("Feedback envoyé à Arize Phoenix")
+        logger.info(f"Feedback ({feedback.value}) envoyé à Arize Phoenix")
     except Exception as e:
         logger.warning(f"Échec de l'envoi du feedback à Phoenix : {e}")
 
