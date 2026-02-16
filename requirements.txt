@@ -284,3 +284,5 @@ zstandard==0.25.0
 qdrant-client
 llama-index-vector-stores-qdrant
 pytest-asyncio
+chainlit==2.9.6
+spacy==3.8.11
