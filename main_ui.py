@@ -12,12 +12,12 @@ from llama_index.core.callbacks import CallbackManager
 from chainlit.llama_index.callbacks import LlamaIndexCallbackHandler
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 
-# Initialisation globale de l'instrumentation (Audit-Fix)
-LlamaIndexInstrumentor().instrument()
-
 # Configuration du moteur RAG
 from src.generation.rag_engine import RAGEngine
 from src.config import setup_settings
+
+# Initialisation globale de l'instrumentation (Audit-Fix)
+LlamaIndexInstrumentor().instrument()
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
