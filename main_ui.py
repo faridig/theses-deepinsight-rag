@@ -66,25 +66,27 @@ async def start():
             display="side"
         )
         # await obs_element.send()
-        await cl.run_sync(obs_element.send())
+        await cl.run_sync(obs_element.send(for_id=cl.user_session.get("status_msg").id))
         
         dashboard_element = await get_quality_dashboard_element()
         if dashboard_element:
             # await dashboard_element.send()
-            await cl.run_sync(dashboard_element.send())
+            await cl.run_sync(dashboard_element.send(for_id=cl.user_session.get("status_msg").id))
         else:
             # Élément par défaut si pas d'audit
             await cl.Text(
                 name="📊 Dashboard Qualité",
                 content="Aucun rapport d'audit trouvé dans `docs/AUDITS/`.\nLancez `python scripts/audit_quality.py` pour générer un rapport.",
                 display="side"
-            ).send()
-            
+            )
+            # await cl.run_sync(cl.Text(...).send(for_id=cl.user_session.get("status_msg").id))
+
         # Message de bienvenue
         status_msg = cl.Message(
             content=f"Moteur DeepInsight prêt. Thème actif : **{selected_theme}**.{stats_info}\nPosez vos questions sur les thèses."
         )
-        await status_msg.send()
+        # await status_msg.send()
+        await cl.run_sync(status_msg.send())
         cl.user_session.set("status_msg", status_msg)
         
     except Exception as e:
