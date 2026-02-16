@@ -20,7 +20,7 @@ def setup_phoenix_instrumentation():
         from opentelemetry import trace
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk import trace as trace_sdk
-        from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         
         # Détection du mode test - plusieurs méthodes
         is_test_mode = (
