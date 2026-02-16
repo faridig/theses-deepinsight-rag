@@ -185,7 +185,8 @@ class VectorService:
             info = self.client.get_collection(collection_name=target)
             # Utilisation de getattr pour la robustesse selon la version de qdrant-client
             points_count = getattr(info, "points_count", 0)
-            if points_count is None: points_count = 0
+            if points_count is None:
+                points_count = 0
             
             return {
                 "points_count": points_count,

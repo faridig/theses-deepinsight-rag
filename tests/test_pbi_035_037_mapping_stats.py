@@ -1,5 +1,4 @@
 import pytest
-import os
 from src.indexing.vector_service import VectorService
 from src.generation.rag_engine import RAGEngine
 from llama_index.core.schema import TextNode
