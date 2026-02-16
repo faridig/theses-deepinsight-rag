@@ -156,6 +156,45 @@ class VectorService:
                 ))
         return nodes
 
+    def list_collections(self) -> list[str]:
+        """
+        Liste toutes les collections disponibles dans Qdrant,
+        filtrées pour ne garder que les thèmes de thèses (PBI-035).
+        """
+        try:
+            collections_response = self.client.get_collections()
+            all_names = [c.name for c in collections_response.collections]
+            
+            # Filtrage : On garde les collections qui ne sont pas purement techniques
+            # (Ex: on pourrait exclure 'test', 'admin', etc. si elles existaient)
+            # Pour l'instant, on accepte tout ce qui ressemble à un thème normalisé
+            excluded = ["test", "default"]
+            filtered = [name for name in all_names if name not in excluded]
+            
+            return sorted(filtered)
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des collections : {e}")
+            return []
+
+    def get_collection_stats(self, collection_name: Optional[str] = None) -> dict[str, Any]:
+        """
+        Récupère des statistiques sur une collection (PBI-037).
+        """
+        target = collection_name or self.collection_name
+        try:
+            info = self.client.get_collection(collection_name=target)
+            # Utilisation de getattr pour la robustesse selon la version de qdrant-client
+            points_count = getattr(info, "points_count", 0)
+            if points_count is None: points_count = 0
+            
+            return {
+                "points_count": points_count,
+                "status": str(info.status),
+            }
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des stats de {target} : {e}")
+            return {"points_count": 0, "status": "error"}
+
     def get_retriever(self, similarity_top_k: int = 5):
         """
         Retourne un retriever pour l'index actuel.

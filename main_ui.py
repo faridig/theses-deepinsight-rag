@@ -35,6 +35,28 @@ async def start():
         engine = RAGEngine()
         cl.user_session.set("query_engine", engine)
         
+        # Détection dynamique des thèmes (PBI-035)
+        themes = engine.get_available_themes()
+        
+        # Configuration des paramètres (PBI-036)
+        settings = await cl.ChatSettings([
+            cl.input_widget.Select(
+                id="Theme",
+                label="Domaine d'étude",
+                values=themes if themes else ["default"],
+                initial_index=0
+            ),
+        ]).send()
+        
+        selected_theme = settings.get("Theme")
+        cl.user_session.set("theme", selected_theme)
+        
+        # Stats du thème (PBI-037)
+        stats_info = ""
+        if selected_theme:
+            stats = engine.get_theme_stats(selected_theme)
+            stats_info = f"\n📊 **Statistiques**: {stats.get('points_count', 0)} extraits indexés."
+
         # Éléments de l'interface (PBI-031/032)
         elements = [
             cl.Text(
@@ -51,13 +73,29 @@ async def start():
             
         # Message de bienvenue personnalisé avec les éléments attachés
         await cl.Message(
-            content="Moteur DeepInsight prêt. Posez vos questions sur les thèses. (Cliquez sur les sources dans la barre latérale pour plus de détails)",
+            content=f"Moteur DeepInsight prêt. Thème actif : **{selected_theme}**.{stats_info}\nPosez vos questions sur les thèses.",
             elements=elements
         ).send()
         
     except Exception as e:
         logger.error(f"Erreur d'initialisation : {e}")
         await cl.Message(content=f"Erreur d'initialisation du moteur : {e}").send()
+
+@cl.on_settings_update
+async def setup_agent(settings):
+    """
+    Mise à jour du thème lors du changement dans l'UI.
+    """
+    new_theme = settings.get("Theme")
+    cl.user_session.set("theme", new_theme)
+    
+    engine = cl.user_session.get("query_engine")
+    stats_info = ""
+    if engine and new_theme:
+        stats = engine.get_theme_stats(new_theme)
+        stats_info = f"\n📊 **Statistiques**: {stats.get('points_count', 0)} extraits indexés."
+
+    await cl.Message(content=f"Domaine de recherche mis à jour : **{new_theme}**.{stats_info}").send()
 
 async def get_quality_dashboard_element():
     """
@@ -96,12 +134,14 @@ async def main(message: cl.Message):
     Gestion des messages utilisateurs.
     """
     engine = cl.user_session.get("query_engine")
+    theme = cl.user_session.get("theme")
+    
     if not engine:
         await cl.Message(content="Le moteur n'est pas initialisé.").send()
         return
 
-    # Exécution de la requête via RAG
-    response = await engine.aask(message.content)
+    # Exécution de la requête via RAG avec le thème sélectionné (PBI-036)
+    response = await engine.aask(message.content, theme=theme)
     
     # Préparation de la réponse (On retire la liste brute des sources car on va utiliser les éléments)
     answer_text = str(response).split("\n\nSources :")[0]

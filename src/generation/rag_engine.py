@@ -3,7 +3,7 @@ import logging
 import asyncio
 import time
 import sys
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from llama_index.core import (
     Settings,
@@ -307,3 +307,18 @@ class RAGEngine:
                 response=f"Une erreur est survenue lors du traitement de votre question : {e}", 
                 source_nodes=[]
             )
+
+    def get_available_themes(self) -> List[str]:
+        """
+        Détecte dynamiquement les thèmes disponibles dans Qdrant (PBI-035).
+        """
+        # On utilise une instance temporaire ou le service partagé pour lister
+        svc = self._get_vector_service(self.default_collection)
+        return svc.list_collections()
+
+    def get_theme_stats(self, theme: str) -> Dict[str, Any]:
+        """
+        Récupère les stats pour un thème donné (PBI-037).
+        """
+        svc = self._get_vector_service(theme)
+        return svc.get_collection_stats(theme)
