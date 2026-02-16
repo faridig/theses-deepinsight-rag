@@ -39,51 +39,53 @@ async def start():
         
         # Détection dynamique des thèmes (PBI-035)
         themes = engine.get_available_themes()
-        
-        # Configuration des paramètres (PBI-036)
-        settings = await cl.ChatSettings([
+
+        # Construction des éléments de la barre latérale
+        sidebar_elements = [
             cl.input_widget.Select(
                 id="Theme",
                 label="Domaine d'étude",
                 values=themes if themes else ["default"],
                 initial_index=0
-            ),
-        ]).send()
+            )
+        ]
+
+        # Ajout du dashboard qualité
+        dashboard_element = await get_quality_dashboard_element()
+        if dashboard_element:
+            sidebar_elements.append(dashboard_element)
+        else:
+            sidebar_elements.append(cl.Text(
+                name="📊 Dashboard Qualité",
+                content="Aucun rapport d'audit trouvé dans `docs/AUDITS/`.",
+                display="side"
+            ))
+            
+        # Ajout du lien d'observabilité
+        sidebar_elements.append(cl.Text(
+            name="Observabilité",
+            content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
+            display="side"
+        ))
+
+        # Envoi groupé des paramètres de la barre latérale
+        settings = await cl.ChatSettings(sidebar_elements).send()
         
         selected_theme = settings.get("Theme")
         cl.user_session.set("theme", selected_theme)
         
-        # Stats du thème (PBI-037)
+        # Stats du thème
         stats_info = ""
         if selected_theme:
             stats = engine.get_theme_stats(selected_theme)
             stats_info = f"\n📊 **Statistiques**: {stats.get('points_count', 0)} extraits indexés."
 
-        # Message de bienvenue (Envoyé en premier pour servir de parent aux éléments sidebar)
+        # Message de bienvenue (indépendant de la sidebar)
         status_msg = cl.Message(
             content=f"Moteur DeepInsight prêt. Thème actif : **{selected_theme}**.{stats_info}\nPosez vos questions sur les thèses."
         )
         await status_msg.send()
         cl.user_session.set("status_msg", status_msg)
-
-        # Éléments persistants de la barre latérale (PBI-Fix visibilité)
-        obs_element = cl.Text(
-            name="Observabilité",
-            content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
-            display="side"
-        )
-        await obs_element.send(for_id=status_msg.id)
-        
-        dashboard_element = await get_quality_dashboard_element()
-        if dashboard_element:
-            await dashboard_element.send(for_id=status_msg.id)
-        else:
-            # Élément par défaut si pas d'audit
-            await cl.Text(
-                name="📊 Dashboard Qualité",
-                content="Aucun rapport d'audit trouvé dans `docs/AUDITS/`.\nLancez `python scripts/audit_quality.py` pour générer un rapport.",
-                display="side"
-            ).send(for_id=status_msg.id)
             
     except Exception as e:
         logger.error(f"Erreur d'initialisation : {e}")
