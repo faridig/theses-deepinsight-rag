@@ -61,7 +61,8 @@ def run_audit(dataset_path=None):
             if spans_df is not None and not spans_df.empty:
                 for _, row in spans_df.iterrows():
                     attributes = row.get('attributes', {})
-                    if attributes is None: continue
+                    if attributes is None:
+                        continue
                     
                     query = attributes.get('input.value') or attributes.get('query_str')
                     response = attributes.get('output.value') or attributes.get('response')
@@ -76,7 +77,8 @@ def run_audit(dataset_path=None):
                             if retriever_spans is not None:
                                 for _, r_span in retriever_spans.iterrows():
                                     r_attr = r_span.get('attributes', {})
-                                    if r_attr is None: continue
+                                    if r_attr is None:
+                                        continue
                                     docs = r_attr.get('retrieval.documents', [])
                                     for doc in docs:
                                         if isinstance(doc, dict):

@@ -90,9 +90,6 @@ async def main(message: cl.Message):
         await cl.Message(content="Le moteur n'est pas initialisé.").send()
         return
 
-    # Message d'attente
-    msg = cl.Message(content="")
-    
     # Exécution de la requête via RAG
     # Note: On utilise le query_engine interne de RAGEngine pour profiter des callbacks automatiques
     # mais on garde la logique de post-processing de RAGEngine.
@@ -155,7 +152,7 @@ async def process_feedback(feedback):
         with open(file_path, "r", encoding="utf-8") as f:
             try:
                 feedbacks = json.load(f)
-            except:
+            except Exception:
                 feedbacks = []
                 
     feedbacks.append(feedback_data)
