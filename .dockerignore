@@ -1,0 +1,13 @@
+.venv
+venv
+data
+storage
+storage_test
+data_test
+.git
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+*.pdf
+*.json

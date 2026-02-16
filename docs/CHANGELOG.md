@@ -1,5 +1,18 @@
 # Changelog - Theses-DeepInsight RAG
 
+## [1.4.0] - 2026-02-15
+### Ajouté
+- **Sprint 13 : Durcissement & Audit (PBI-022, 013)**
+    - Migration vers le protocole **gRPC** (port 6334) pour Qdrant.
+    - Activation de la **Scalar Quantization (Int8)** et du stockage **On-Disk** pour les vecteurs.
+    - Script `scripts/audit_quality.py` pour l'évaluation automatique via **Ragas**.
+    - Intégration des scores de qualité (`faithfulness`, `relevancy`) dans **Arize Phoenix**.
+    - Génération de rapports d'audit automatiques dans `docs/AUDITS/`.
+
+## 💡 LEÇONS APPRISES
+- **Incompatibilité Ragas/OpenAIEmbeddings** : La version actuelle de `ragas` attend une méthode `embed_query` spécifique. Pour le PBI-030 (Générateur synthétique), il faudra wrapper l'embedding LlamaIndex dans `langchain_openai.OpenAIEmbeddings` pour obtenir des scores non nuls.
+- **Optimisation Qdrant** : L'activation de `on_disk=True` sur les vecteurs est immédiate mais nécessite une surveillance de la latence IO lors des premières recherches massives.
+
 ## [1.3.0] - 2026-02-14
 ### Ajouté
 - **Sprint 12 : Qualité de Données & Hygiène (PBI-026, 027, 028)**
