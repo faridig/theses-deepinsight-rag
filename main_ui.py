@@ -35,50 +35,60 @@ async def start():
         engine = RAGEngine()
         cl.user_session.set("query_engine", engine)
         
-        # Message de bienvenue personnalisé
+        # Éléments de l'interface (PBI-031/032)
+        elements = [
+            cl.Text(
+                name="Observabilité",
+                content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
+                display="side"
+            )
+        ]
+        
+        # Dashboard Qualité
+        dashboard_element = await get_quality_dashboard_element()
+        if dashboard_element:
+            elements.append(dashboard_element)
+            
+        # Message de bienvenue personnalisé avec les éléments attachés
         await cl.Message(
-            content="Moteur DeepInsight prêt. Posez vos questions sur les thèses."
+            content="Moteur DeepInsight prêt. Posez vos questions sur les thèses. (Cliquez sur les sources dans la barre latérale pour plus de détails)",
+            elements=elements
         ).send()
-        
-        # Ajout du lien Phoenix dans la barre latérale (PBI-032)
-        await cl.Text(
-            name="Observabilité",
-            content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
-            display="side"
-        ).send()
-        
-        # Dashboard Qualité (PBI-031/032)
-        await display_quality_dashboard()
         
     except Exception as e:
         logger.error(f"Erreur d'initialisation : {e}")
         await cl.Message(content=f"Erreur d'initialisation du moteur : {e}").send()
 
-async def display_quality_dashboard():
+async def get_quality_dashboard_element():
     """
-    Affiche les derniers scores d'audit dans la barre latérale.
+    Récupère le dernier rapport d'audit et retourne un élément cl.Text pour l'affichage.
     """
     audit_dir = "docs/AUDITS"
     if not os.path.exists(audit_dir):
-        return
+        return None
         
     audit_files = sorted([f for f in os.listdir(audit_dir) if f.startswith("audit_") and f.endswith(".md")], reverse=True)
     if not audit_files:
-        return
+        return None
         
     latest_audit = audit_files[0]
-    with open(os.path.join(audit_dir, latest_audit), "r", encoding="utf-8") as f:
-        content = f.read()
+    try:
+        with open(os.path.join(audit_dir, latest_audit), "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        # Extraction sommaire du tableau des scores
+        scores_section = "## Résumé des Scores Ragas\n\n"
+        if scores_section in content:
+            summary = content.split(scores_section)[1].split("##")[0]
+            return cl.Text(
+                name="📊 Dashboard Qualité",
+                content=f"Dernier Audit ({latest_audit}):\n\n{summary}\n\n*Crash Test = Synthétique*\n*Live = Traces réelles*",
+                display="side"
+            )
+    except Exception as e:
+        logger.warning(f"Erreur lors de la lecture de l'audit : {e}")
         
-    # Extraction sommaire du tableau des scores
-    scores_section = "## Résumé des Scores Ragas\n\n"
-    if scores_section in content:
-        summary = content.split(scores_section)[1].split("##")[0]
-        await cl.Text(
-            name="📊 Dashboard Qualité",
-            content=f"Dernier Audit ({latest_audit}):\n\n{summary}\n\n*Crash Test = Synthétique*\n*Live = Traces réelles*",
-            display="side"
-        ).send()
+    return None
 
 @cl.on_message
 async def main(message: cl.Message):
@@ -91,37 +101,37 @@ async def main(message: cl.Message):
         return
 
     # Exécution de la requête via RAG
-    # Note: On utilise le query_engine interne de RAGEngine pour profiter des callbacks automatiques
-    # mais on garde la logique de post-processing de RAGEngine.
-    response = await cl.make_async(engine.ask)(message.content)
+    response = await engine.aask(message.content)
     
-    # Préparation de la réponse
-    answer_text = str(response)
+    # Préparation de la réponse (On retire la liste brute des sources car on va utiliser les éléments)
+    answer_text = str(response).split("\n\nSources :")[0]
     
     # Extraction des sources (PBI-031)
     elements = []
-    source_names = []
+    source_refs = []
     
     if hasattr(response, "source_nodes"):
         for i, node in enumerate(response.source_nodes):
-            source_id = f"Source {i+1}"
-            source_names.append(source_id)
+            source_name = f"Extrait {i+1}"
+            source_refs.append(source_name)
             
             # Contenu du texte source
             content = node.get_content()
             metadata = node.metadata
+            title = metadata.get('titre') or metadata.get('file_name') or 'Document'
+            author = metadata.get('auteur') or 'Auteur Inconnu'
             
             # Ajout d'un élément texte pour le side panel
             elements.append(
                 cl.Text(
-                    name=source_id,
-                    content=f"**Titre**: {metadata.get('titre', 'N/A')}\n\n**Extrait**:\n{content}",
+                    name=source_name,
+                    content=f"### {title}\n**Auteur**: {author}\n\n---\n\n**Extrait**:\n{content}",
                     display="side"
                 )
             )
-            
-            # Si on a un lien vers le PDF (Local ou URL)
-            # Pour le MVP, on affiche le texte, mais on pourrait ajouter cl.Pdf
+    
+    if source_refs:
+        answer_text += "\n\n**Sources :** " + ", ".join([f"[{ref}]" for ref in source_refs])
     
     # Envoi de la réponse avec les sources
     await cl.Message(
