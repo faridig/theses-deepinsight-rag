@@ -65,11 +65,13 @@ async def start():
             content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
             display="side"
         )
-        await obs_element.send()
+        # await obs_element.send()
+        await cl.run_sync(obs_element.send())
         
         dashboard_element = await get_quality_dashboard_element()
         if dashboard_element:
-            await dashboard_element.send()
+            # await dashboard_element.send()
+            await cl.run_sync(dashboard_element.send())
         else:
             # Élément par défaut si pas d'audit
             await cl.Text(
