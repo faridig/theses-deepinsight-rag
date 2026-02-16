@@ -8,16 +8,11 @@ import chainlit as cl
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from llama_index.core import Settings
-from llama_index.core.callbacks import CallbackManager
 from chainlit.llama_index.callbacks import LlamaIndexCallbackHandler
-from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 
 # Configuration du moteur RAG
 from src.generation.rag_engine import RAGEngine
 from src.config import setup_settings
-
-# Initialisation globale de l'instrumentation (Audit-Fix)
-LlamaIndexInstrumentor().instrument()
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
@@ -31,8 +26,10 @@ async def start():
     setup_settings()
     
     # Intégration du handler Chainlit pour LlamaIndex (Nested Steps)
+    # On ajoute le handler de Chainlit au manager existant (qui contient Phoenix)
+    # au lieu de tout écraser (PBI-Fix Phoenix Tracing)
     callback_handler = LlamaIndexCallbackHandler()
-    Settings.callback_manager = CallbackManager([callback_handler])
+    Settings.callback_manager.add_handler(callback_handler)
     
     try:
         # Initialisation du moteur RAG
