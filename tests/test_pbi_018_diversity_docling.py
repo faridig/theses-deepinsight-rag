@@ -11,23 +11,24 @@ class TestDiversityDocling:
         # Nodes avec file_name au lieu de titre
         node1 = TextNode(text="Frag 1 Doc A", metadata={"file_name": "these_a.pdf"})
         node2 = TextNode(text="Frag 2 Doc A", metadata={"file_name": "these_a.pdf"})
-        node3 = TextNode(text="Frag 1 Doc B", metadata={"file_name": "these_b.pdf"})
+        node3 = TextNode(text="Frag 3 Doc A", metadata={"file_name": "these_a.pdf"})  # Troisième fragment
+        node4 = TextNode(text="Frag 1 Doc B", metadata={"file_name": "these_b.pdf"})
         
         nodes = [
             NodeWithScore(node=node1, score=0.9),
             NodeWithScore(node=node2, score=0.85),
             NodeWithScore(node=node3, score=0.8),
+            NodeWithScore(node=node4, score=0.7),
         ]
         
-        # On veut 2 thèses différentes
-        processor = DiversityPostprocessor(target_top_n=2)
+        # On veut jusqu'à 2 extraits par document
+        processor = DiversityPostprocessor(target_top_n=3)
         filtered_nodes = processor._postprocess_nodes(nodes)
         
-        assert len(filtered_nodes) == 2
+        assert len(filtered_nodes) == 3  # 2 de A, 1 de B
         file_names = [n.node.metadata["file_name"] for n in filtered_nodes]
-        assert "these_a.pdf" in file_names
+        assert file_names.count("these_a.pdf") == 2  # 2 extraits de these_a.pdf
         assert "these_b.pdf" in file_names
-        assert file_names.count("these_a.pdf") == 1
 
     def test_diversity_mixed_metadata(self):
         """
