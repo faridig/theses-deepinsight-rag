@@ -1,5 +1,20 @@
 # Changelog - Theses-DeepInsight RAG
 
+## [1.5.0] - 2026-02-16
+### Ajouté
+- **Sprint 14 : Visualisation & Auto-Évaluation (PBI-030, 031, 032, 033, 034)**
+    - Génération de datasets de test synthétiques via LlamaIndex (`scripts/generate_synthetic_data.py`).
+    - Interface utilisateur conversationnelle avec **Chainlit** (`main_ui.py`).
+    - Visualisation du raisonnement (Chain-of-Thought) et affichage des sources.
+    - Tableau de bord de qualité intégré avec les scores **Ragas** et les traces **Arize Phoenix**.
+    - Boucle de feedback humain (thumbs up/down) stockée dans Phoenix.
+    - Conteneurisation de l'UI Chainlit (`Dockerfile.ui`) et intégration `docker-compose.yml`.
+
+## 💡 LEÇONS APPRISES
+- **Stabilité de Chainlit/Docker** : Le montage des volumes locaux (`/app`) dans Docker peut causer des problèmes de permission avec Phoenix si les dossiers de traces ne sont pas pré-existants. Toujours s'assurer que les répertoires de logs/données sont initialisés avec les bons droits.
+- **Ragas Synthetic Generation** : La génération native de LlamaIndex est plus simple à intégrer pour la diversité thématique que le wrapper Ragas externe, mais nécessite un post-traitement pour correspondre au format attendu par les scripts d'audit.
+- **Incompatibilité Ragas/OpenAIEmbeddings** (Sprint 13) : Résolue par l'utilisation de wrappers standardisés.
+
 ## [1.4.0] - 2026-02-15
 ### Ajouté
 - **Sprint 13 : Durcissement & Audit (PBI-022, 013)**
