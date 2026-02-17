@@ -37,27 +37,42 @@ async def start():
         engine = RAGEngine()
         cl.user_session.set("query_engine", engine)
         
+        # Vérification de la santé de l'infrastructure (Audit-Fix)
+        infra_ready = True
+        try:
+            svc = engine._get_vector_service(engine.default_collection)
+            if not svc.ping():
+                infra_ready = False
+                logger.warning("Infrastructure Qdrant non disponible au démarrage.")
+        except Exception:
+            infra_ready = False
+
         # Détection dynamique des thèmes (PBI-035)
         themes = engine.get_available_themes()
 
         # Construction des éléments de la barre latérale
-        # Seuls les InputWidget peuvent être dans ChatSettings
         from chainlit.input_widget import InputWidget
+        
+        # Si infra non prête, on affiche un avertissement clair
+        if not infra_ready:
+            await cl.Message(
+                content="⚠️ **Mode Dégradé** : Le serveur de base de données (Qdrant) est actuellement injoignable. "
+                        "Les fonctionnalités de recherche sont désactivées. Veuillez vérifier votre infrastructure."
+            ).send()
         
         sidebar_widgets: list[InputWidget] = [
             cl.input_widget.Select(
                 id="Theme",
                 label="Domaine d'étude",
-                values=themes if themes else ["Aucun thème disponible"],
+                values=themes if (infra_ready and themes) else ["Aucun thème disponible"],
                 initial_index=0
             )
         ]
 
-        # Envoi des paramètres de la barre latérale (uniquement les widgets interactifs)
+        # Envoi des paramètres de la barre latérale
         settings = await cl.ChatSettings(sidebar_widgets).send()
         
         selected_theme = settings.get("Theme")
-        # Si aucun thème n'est disponible, on utilise une valeur par défaut
         if selected_theme == "Aucun thème disponible":
             selected_theme = None
         cl.user_session.set("theme", selected_theme)
@@ -207,8 +222,8 @@ async def main(message: cl.Message):
     # On va tenter de récupérer l'ID de trace pour le lier au message Chainlit
     # Note: En mode asynchrone, le span_id peut être récupéré via openinference
     try:
-        from openinference.instrumentation import get_current_span
-        span = get_current_span()
+        from opentelemetry import trace
+        span = trace.get_current_span()
         if span and span.get_span_context().is_valid:
             trace_id = span.get_span_context().trace_id
             cl.user_session.set(f"trace_{response.response[:20]}", format(trace_id, '032x'))

@@ -12,8 +12,17 @@ from llama_index.core import (
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
-from llama_index.retrievers.bm25 import BM25Retriever
-from llama_index.postprocessor.cohere_rerank import CohereRerank
+
+try:
+    from llama_index.retrievers.bm25 import BM25Retriever
+except ImportError:
+    BM25Retriever = None
+
+try:
+    from llama_index.postprocessor.cohere_rerank import CohereRerank
+except ImportError:
+    CohereRerank = None
+
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
@@ -25,6 +34,11 @@ from src.config import setup_settings
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+if BM25Retriever is None:
+    logger.warning("BM25Retriever non trouvé dans llama_index.retrievers.bm25")
+if CohereRerank is None:
+    logger.warning("CohereRerank non trouvé dans llama_index.postprocessor.cohere_rerank")
 
 # Paramètres de récupération
 RETRIEVAL_TOP_K = 10
@@ -123,7 +137,7 @@ class RAGEngine:
         # Initialisation paresseuse du reranker
         self.reranker = None
         cohere_api_key = os.getenv("COHERE_API_KEY")
-        if cohere_api_key:
+        if cohere_api_key and CohereRerank:
             try:
                 self.reranker = CohereRerank(
                     api_key=cohere_api_key,
@@ -195,6 +209,12 @@ class RAGEngine:
         logger.info(f"Initialisation du QueryEngine pour la collection : {collection_name}")
         
         vector_service = self._get_vector_service(collection_name)
+        
+        # Gestion du mode dégradé (PBI-Review)
+        if not vector_service.available:
+            logger.error(f"Impossible de créer le QueryEngine pour {collection_name} : VectorService indisponible.")
+            raise RuntimeError(f"Base de données (Qdrant) injoignable pour la collection '{collection_name}'.")
+
         index = vector_service.index
         self.index_ref = index
         
@@ -204,7 +224,7 @@ class RAGEngine:
         # BM25 Retriever
         try:
             nodes = vector_service.get_all_nodes()
-            if nodes:
+            if nodes and BM25Retriever:
                 bm25_retriever = BM25Retriever.from_defaults(
                     nodes=list(nodes),
                     similarity_top_k=RETRIEVAL_TOP_K
@@ -302,19 +322,31 @@ class RAGEngine:
                 
             return response
         except Exception as e:
+            error_msg = str(e)
+            if "injoignable" in error_msg.lower() or "connection refused" in error_msg.lower() or "unavailable" in error_msg.lower():
+                friendly_msg = "Désolé, la base de données de thèses est actuellement inaccessible. Veuillez réessayer plus tard ou contacter un administrateur."
+            else:
+                friendly_msg = f"Une erreur est survenue lors du traitement de votre question : {e}"
+                
             logger.error(f"Erreur lors de la génération de la réponse pour {collection_name} : {e}")
             return Response(
-                response=f"Une erreur est survenue lors du traitement de votre question : {e}", 
+                response=friendly_msg, 
                 source_nodes=[]
             )
 
     def get_available_themes(self) -> List[str]:
         """
         Détecte dynamiquement les thèmes disponibles dans Qdrant (PBI-035).
+        Optimisé pour le mode dégradé.
         """
-        # On utilise une instance temporaire ou le service partagé pour lister
-        svc = self._get_vector_service(self.default_collection)
-        return svc.list_collections()
+        try:
+            svc = self._get_vector_service(self.default_collection)
+            if not svc.available:
+                return []
+            return svc.list_collections()
+        except Exception as e:
+            logger.warning(f"Erreur lors de la récupération des thèmes : {e}")
+            return []
 
     def get_theme_stats(self, theme: str) -> Dict[str, Any]:
         """

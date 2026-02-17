@@ -19,45 +19,64 @@ class VectorService:
     def __init__(self, storage_path: str = "./storage/qdrant", collection_name: str = "theses-default", client: Optional[QdrantClient] = None, aclient: Optional[Any] = None):
         self.storage_path = storage_path
         self.collection_name = collection_name
+        self.available = True
         
         # Initialisation des clients Qdrant
-        if client:
-            self.client = client
-            self.aclient = aclient
-        else:
-            qdrant_url = os.getenv("QDRANT_URL")
-            if qdrant_url:
-                logger.info(f"Utilisation du serveur Qdrant à {qdrant_url}")
-                # Migration gRPC (PBI-022)
-                # Si l'URL contient un port (ex: :6333), on tente de passer en gRPC sur 6334
-                # Sinon on utilise prefer_grpc=True
-                self.client = QdrantClient(url=qdrant_url, prefer_grpc=True)
-                self.aclient = AsyncQdrantClient(url=qdrant_url, prefer_grpc=True)
-            elif self.storage_path == ":memory:":
-                logger.info("Utilisation de Qdrant en mémoire")
-                self.client = QdrantClient(":memory:")
-                self.aclient = None # L'async est désactivé en local pour éviter les verrous
+        try:
+            if client:
+                self.client = client
+                self.aclient = aclient
             else:
-                logger.info(f"Utilisation du stockage local Qdrant : {self.storage_path}")
-                os.makedirs(self.storage_path, exist_ok=True)
-                self.client = QdrantClient(path=self.storage_path)
-                self.aclient = None 
-        
-        # Initialisation du Vector Store Qdrant
-        self.vector_store = QdrantVectorStore(
-            collection_name=self.collection_name, 
-            client=self.client, 
-            aclient=self.aclient
-        )
-        
-        # Initialisation du StorageContext
-        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+                qdrant_url = os.getenv("QDRANT_URL")
+                if qdrant_url:
+                    logger.info(f"Utilisation du serveur Qdrant à {qdrant_url}")
+                    # Migration gRPC (PBI-022)
+                    self.client = QdrantClient(url=qdrant_url, prefer_grpc=True)
+                    self.aclient = AsyncQdrantClient(url=qdrant_url, prefer_grpc=True)
+                elif self.storage_path == ":memory:":
+                    logger.info("Utilisation de Qdrant en mémoire")
+                    self.client = QdrantClient(":memory:")
+                    self.aclient = None # L'async est désactivé en local pour éviter les verrous
+                else:
+                    logger.info(f"Utilisation du stockage local Qdrant : {self.storage_path}")
+                    os.makedirs(self.storage_path, exist_ok=True)
+                    self.client = QdrantClient(path=self.storage_path)
+                    self.aclient = None 
+            
+            # Initialisation du Vector Store Qdrant (PBI-Review: Isolation Constructeur)
+            self.vector_store = QdrantVectorStore(
+                collection_name=self.collection_name, 
+                client=self.client, 
+                aclient=self.aclient
+            )
+            
+            # Initialisation du StorageContext
+            self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+        except Exception as e:
+            logger.error(f"Échec de connexion à Qdrant : {e}")
+            self.available = False
+            self.vector_store = None
+            self.storage_context = None
         
         self._index: Optional[VectorStoreIndex] = None
+
+    def ping(self) -> bool:
+        """Vérifie si la connexion à Qdrant est opérationnelle."""
+        if not self.available or not self.client:
+            return False
+        try:
+            # Un simple appel pour vérifier la santé
+            self.client.get_collections()
+            return True
+        except Exception:
+            return False
 
     @property
     def index(self) -> VectorStoreIndex:
         """Retourne l'index actuel, en le chargeant depuis le vector store si nécessaire."""
+        if not self.available:
+            raise RuntimeError("VectorService indisponible : impossible d'accéder à l'index.")
+            
         if self._index is None:
             self._index = VectorStoreIndex.from_vector_store(
                 self.vector_store,
@@ -69,6 +88,10 @@ class VectorService:
         """
         Crée une collection Qdrant de manière asynchrone si elle n'existe pas (PBI-023).
         """
+        if not self.available:
+            logger.warning("create_collection_if_not_exists ignoré : service indisponible.")
+            return
+
         if self.aclient:
             try:
                 collections = await self.aclient.get_collections()
@@ -122,6 +145,9 @@ class VectorService:
         """
         Indexe les nœuds dans la collection actuelle.
         """
+        if not self.available:
+            raise RuntimeError("VectorService indisponible : impossible d'indexer les nœuds.")
+            
         if self._index is None:
             self._index = VectorStoreIndex(
                 nodes, 
@@ -136,6 +162,10 @@ class VectorService:
         """
         Récupère tous les nœuds de la collection Qdrant.
         """
+        if not self.available:
+            logger.warning("get_all_nodes : service indisponible.")
+            return []
+            
         points, _ = self.client.scroll(
             collection_name=self.collection_name,
             with_payload=True,
@@ -162,6 +192,9 @@ class VectorService:
         filtrées pour ne garder que les thèmes de thèses (PBI-035).
         Optimisé pour le nettoyage de la pollution (PBI-Review).
         """
+        if not self.available:
+            return []
+            
         try:
             collections_response = self.client.get_collections()
             all_names = [c.name for c in collections_response.collections]
@@ -188,6 +221,9 @@ class VectorService:
         """
         Récupère des statistiques sur une collection (PBI-037).
         """
+        if not self.available:
+            return {"points_count": 0, "status": "unreachable"}
+            
         target = collection_name or self.collection_name
         try:
             info = self.client.get_collection(collection_name=target)
