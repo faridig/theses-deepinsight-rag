@@ -27,7 +27,7 @@ def ensure_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def run_audit(dataset_path=None):
+def run_audit(dataset_path=None, collection=None):
     logger.info("Démarrage de l'audit de qualité Ragas...")
     
     # 1. Initialisation de l'environnement
@@ -42,14 +42,20 @@ def run_audit(dataset_path=None):
             synthetic_data = json.load(f)
             
         engine = RAGEngine()
-        for item in synthetic_data[:5]: # Limité à 5 pour l'audit rapide
+        # On utilise la collection spécifiée si fournie
+        target_theme = collection if collection else engine.default_collection
+        
+        for item in synthetic_data[:5]: # Échantillonnage 10% de 50 (Decision 17.2)
             question = item["question"]
-            logger.info(f"Interrogation du RAG pour : {question}")
-            response = engine.ask(question)
+            logger.info(f"Interrogation du RAG ({target_theme}) pour : {question}")
+            response = engine.ask(question, theme=target_theme)
+            
+            # On retire les sources du texte de la réponse pour l'évaluation de fidélité
+            answer_clean = str(response).split("\n\nSources :")[0]
             
             audit_data.append({
                 "question": question,
-                "answer": str(response).split("\n\nSources :")[0],
+                "answer": answer_clean,
                 "contexts": [node.get_content() for node in response.source_nodes] if hasattr(response, "source_nodes") else [],
                 "ground_truth": item["ground_truth"]
             })
@@ -134,7 +140,8 @@ def run_audit(dataset_path=None):
         
         # 5. Rapport
         report_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        report_path = f"docs/AUDITS/audit_{report_date}.md"
+        report_filename = f"audit_{report_date}.md"
+        report_path = f"docs/AUDITS/{report_filename}"
         ensure_dir("docs/AUDITS")
         
         # Latency analysis
@@ -157,12 +164,22 @@ def run_audit(dataset_path=None):
             f.write("| Métrique | Score |\n| :--- | :--- |\n")
             
             try:
-                scores = result.scores if hasattr(result, "scores") else result
-                for metric, score in scores.items():
-                    f.write(f"| {metric} | {score:.4f} |\n")
+                # Gestion robuste du résultat Ragas
+                if isinstance(result, dict):
+                    scores = result
+                elif hasattr(result, "scores") and isinstance(result.scores, dict):
+                    scores = result.scores
+                else:
+                    scores = result # Fallback
+                
+                if isinstance(scores, dict):
+                    for metric, score in scores.items():
+                        f.write(f"| {metric} | {score:.4f} |\n")
+                else:
+                    f.write(f"| Global | {scores} |\n")
             except Exception as e:
                 logger.warning(f"Erreur lors de l'écriture des scores : {e}")
-                f.write(f"| Global | {result} |\n")
+                f.write(f"| Résultat | {result} |\n")
             
             f.write("\n## 3. Détails par Question\n\n")
             try:
@@ -180,7 +197,26 @@ def run_audit(dataset_path=None):
             except Exception as e:
                 logger.warning(f"Détails non disponibles : {e}")
 
-        logger.info(f"Rapport généré : {report_path}")
+        logger.info(f"Rapport local généré : {report_path}")
+        
+        # 6. Export vers MinIO (PBI-043)
+        try:
+            from src.ingestion.theses_client import ThesesClient
+            t_client = ThesesClient()
+            if t_client.fs:
+                bucket_reports = "reports"
+                if not t_client.fs.exists(bucket_reports):
+                    t_client.fs.makedirs(bucket_reports)
+                    logger.info(f"Bucket '{bucket_reports}' créé.")
+                
+                remote_path = f"{bucket_reports}/{report_filename}"
+                with t_client.fs.open(remote_path, "w") as f_remote:
+                    with open(report_path, "r") as f_local:
+                        f_remote.write(f_local.read())
+                
+                logger.info(f"🚀 Rapport exporté vers MinIO : {remote_path}")
+        except Exception as export_err:
+            logger.warning(f"Impossible d'exporter le rapport vers MinIO : {export_err}")
         
     except Exception as e:
         logger.error(f"Erreur durant l'audit : {e}")
@@ -188,4 +224,5 @@ def run_audit(dataset_path=None):
 if __name__ == "__main__":
     import sys
     path = sys.argv[1] if len(sys.argv) > 1 else None
-    run_audit(path)
+    collection = sys.argv[2] if len(sys.argv) > 2 else None
+    run_audit(path, collection)
