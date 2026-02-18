@@ -15,6 +15,7 @@ from ragas.metrics import (
     answer_relevancy,
     context_precision,
 )
+from llama_index.core import Settings
 from src.config import setup_settings
 from src.generation.rag_engine import RAGEngine
 
@@ -56,49 +57,46 @@ def run_audit(dataset_path=None):
         logger.info("Extraction des traces depuis Phoenix...")
         try:
             client = px.Client(endpoint="http://localhost:6006")
-            spans_df = client.get_spans_dataframe(filter_condition='span_kind == "CHAIN"')
+            spans_df = client.get_spans_dataframe()
             
             if spans_df is not None and not spans_df.empty:
-                for _, row in spans_df.iterrows():
-                    attributes = row.get('attributes', {})
-                    if attributes is None:
-                        continue
+                # Filter for Query Engine spans (usually the ones with input.value being a string and no parent)
+                chains = spans_df[spans_df['span_kind'] == "CHAIN"]
+                
+                for _, row in chains.iterrows():
+                    query = row.get('attributes.input.value')
+                    response = row.get('attributes.output.value')
                     
-                    query = attributes.get('input.value') or attributes.get('query_str')
-                    response = attributes.get('output.value') or attributes.get('response')
+                    # We want the main query, not the internal ones with JSON inputs
+                    if isinstance(query, str) and not query.startswith('{') and isinstance(response, str) and not response.startswith('{'):
+                        trace_id = row.get('context.trace_id')
+                        
+                        # Find context for this trace
+                        context = []
+                        retriever_spans = spans_df[(spans_df['context.trace_id'] == trace_id) & (spans_df['span_kind'] == "RETRIEVER")]
+                        for _, r_span in retriever_spans.iterrows():
+                            docs = r_span.get('attributes.retrieval.documents', [])
+                            if docs:
+                                for doc in docs:
+                                    if isinstance(doc, dict):
+                                        context.append(doc.get('document.content', ''))
+                                    else:
+                                        context.append(str(doc))
+                        
+                        if query and response and context:
+                            audit_data.append({
+                                "question": query,
+                                "answer": response,
+                                "contexts": context,
+                                "ground_truth": "N/A"
+                            })
                     
-                    context = []
-                    trace_id = row.get('context.trace_id')
-                    if trace_id:
-                        try:
-                            retriever_spans = client.get_spans_dataframe(
-                                filter_condition=f'trace_id == "{trace_id}" and span_kind == "RETRIEVER"'
-                            )
-                            if retriever_spans is not None:
-                                for _, r_span in retriever_spans.iterrows():
-                                    r_attr = r_span.get('attributes', {})
-                                    if r_attr is None:
-                                        continue
-                                    docs = r_attr.get('retrieval.documents', [])
-                                    for doc in docs:
-                                        if isinstance(doc, dict):
-                                            context.append(doc.get('document.content', ''))
-                                        else:
-                                            context.append(str(doc))
-                        except Exception:
-                            pass
-                    
-                    if query and response and context:
-                        audit_data.append({
-                            "question": query,
-                            "answer": response,
-                            "contexts": context,
-                            "ground_truth": "N/A"
-                        })
-                    if len(audit_data) >= 10:
+                    if len(audit_data) >= 20: 
                         break
         except Exception as e:
             logger.warning(f"Impossible de récupérer les traces Phoenix : {e}. Utilisation du fallback.")
+            import traceback
+            logger.warning(traceback.format_exc())
 
     # 3. Fallback si aucune donnée
     if not audit_data:
@@ -124,12 +122,9 @@ def run_audit(dataset_path=None):
         metrics = [faithfulness, answer_relevancy, context_precision]
         logger.info(f"Lancement de l'évaluation sur {len(audit_data)} items...")
         
-        # Correction Lesson Learned: Ragas attend embed_query et LLM wrapper
         from ragas.llms import LlamaIndexLLMWrapper
         from ragas.embeddings import LlamaIndexEmbeddingsWrapper
-        from llama_index.core import Settings
         
-        # On passe explicitement les modèles à evaluate pour éviter les conflits
         result = evaluate(
             dataset=dataset, 
             metrics=metrics,
@@ -142,34 +137,48 @@ def run_audit(dataset_path=None):
         report_path = f"docs/AUDITS/audit_{report_date}.md"
         ensure_dir("docs/AUDITS")
         
+        # Latency analysis
+        client = px.Client(endpoint="http://localhost:6006")
+        spans_df = client.get_spans_dataframe()
+        avg_latencies = {}
+        if spans_df is not None and not spans_df.empty:
+            spans_df['duration'] = (spans_df['end_time'] - spans_df['start_time']).dt.total_seconds()
+            avg_latencies = spans_df.groupby('span_kind')['duration'].mean().to_dict()
+
         with open(report_path, "w") as f:
-            f.write(f"# Rapport d'Audit Qualité RAG - {report_date}\n\n")
-            f.write("## Résumé des Scores Ragas\n\n")
+            f.write(f"# Rapport d'Audit Holistique RAG - {report_date}\n\n")
+            
+            f.write("## 1. Analyse de Latence (Moyenne par étape)\n\n")
+            f.write("| Étape | Temps Moyen (s) |\n| :--- | :--- |\n")
+            for kind, duration in avg_latencies.items():
+                f.write(f"| {kind} | {duration:.3f}s |\n")
+            
+            f.write("\n## Résumé des Scores Ragas\n\n")
             f.write("| Métrique | Score |\n| :--- | :--- |\n")
             
-            # Gestion robuste du résultat
             try:
-                # result se comporte comme un dict pour les scores globaux
-                for metric, score in result.items():
+                scores = result.scores if hasattr(result, "scores") else result
+                for metric, score in scores.items():
                     f.write(f"| {metric} | {score:.4f} |\n")
             except Exception as e:
                 logger.warning(f"Erreur lors de l'écriture des scores : {e}")
                 f.write(f"| Global | {result} |\n")
             
-            f.write("\n## Détails par Question\n\n")
+            f.write("\n## 3. Détails par Question\n\n")
             try:
-                df_res = result.to_pandas()
-                for i, row in df_res.iterrows():
-                    q = row.get('question', f"Question {i}")
-                    f.write(f"### Q: {q}\n")
-                    # Afficher toutes les métriques
-                    for col in df_res.columns:
-                        if col not in ['question', 'answer', 'contexts', 'ground_truth']:
-                            f.write(f"- **{col}**: {row[col]}\n")
-                    f.write("\n")
+                if hasattr(result, "to_pandas"):
+                    df_res = result.to_pandas()
+                    for i, row in df_res.iterrows():
+                        q = row.get('question', f"Question {i}")
+                        f.write(f"### Q: {q}\n")
+                        for col in df_res.columns:
+                            if col not in ['question', 'answer', 'contexts', 'ground_truth']:
+                                f.write(f"- **{col}**: {row[col]}\n")
+                        f.write("\n")
+                else:
+                    f.write("Détails non disponibles sous forme de tableau.\n")
             except Exception as e:
                 logger.warning(f"Détails non disponibles : {e}")
-                f.write("Détails non disponibles sous forme de tableau.\n")
 
         logger.info(f"Rapport généré : {report_path}")
         
