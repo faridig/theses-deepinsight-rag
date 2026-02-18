@@ -47,10 +47,19 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-032** | **Intégration Traces Phoenix** | Accès direct aux traces Arize Phoenix depuis l'interface. | DONE | MOYENNE |
 | **PBI-033** | **Boucle de Feedback Humain** | Système de vote (👍/👎) Chainlit pour collecte de données. | DONE | MOYENNE |
 | **PBI-034** | **Dockerisation de l'UI** | Conteneurisation de Chainlit pour déploiement complet. | DONE | BASSE |
-| **PBI-035** | **Mapping Dynamique Qdrant** | Service de découverte automatique des collections/thèmes existants. | EN COURS | HAUTE |
-| **PBI-036** | **Sélecteur de Domaine UI** | Menu interactif Chainlit pour router les questions vers le bon thème. | EN ATTENTE | HAUTE |
-| **PBI-037** | **Indicateurs de Volume Data** | Affichage dynamique du compteur de documents par thème dans l'UI. | EN ATTENTE | MOYENNE |
-| **PBI-038** | **Nettoyage Code Legacy (Sample)** | Suppression des dépendances aux fichiers PDF de test locaux. | EN ATTENTE | MOYENNE |
+| **PBI-035** | **Mapping Dynamique Qdrant** | Service de découverte automatique des collections/thèmes existants. | DONE | HAUTE |
+| **PBI-036** | **Sélecteur de Domaine UI** | Menu interactif Chainlit pour router les questions vers le bon thème. | DONE | HAUTE |
+| **PBI-037** | **Indicateurs de Volume Data** | Affichage dynamique du compteur de documents par thème dans l'UI. | DONE | MOYENNE |
+| **PBI-038** | **Nettoyage Code Legacy (Sample)** | Suppression des dépendances aux fichiers PDF de test locaux. | DONE | MOYENNE |
+| **PBI-039** | **Ingestion Massive & Indexation** | Ingestion de 3 thèmes complets pour test de charge. | DONE | HAUTE |
+| **PBI-040** | **Simulation de Trafic & Stress Test** | Simulation de 50+ requêtes pour génération de traces. | DONE | HAUTE |
+| **PBI-041** | **Rapport Performance Holistique** | Analyse Ragas + Latence sur le volume de données. | DONE | HAUTE |
+| **PBI-042** | **[QUALITÉ] Prompt Engineering** | Durcissement des contraintes pour atteindre >0.85 de Faithfulness. | À FAIRE | CRITIQUE |
+| **PBI-043** | **[PROD] Automation de l'Audit** | Déclenchement périodique et export des rapports vers MinIO (S3). | À FAIRE | HAUTE |
+| **PBI-044** | **[UX/ADMIN] Dashboard de Confiance** | Affichage du score de fidélité moyen dans l'interface Chainlit. | À FAIRE | MOYENNE |
+| **PBI-045** | **[TECH] Migration Phoenix Prod** | Configuration OTLP robuste pour éviter les erreurs de connexion. | À FAIRE | MOYENNE |
+| **PBI-046** | **[TECH] Housekeeping & Structure** | Nettoyage des fichiers racine et réorganisation des dossiers de stockage. | À FAIRE | BASSE |
+| **PBI-047** | **[QUALITÉ] Dataset de Vérité (LLM-Generated)** | Génération d'un référentiel Q/A par un LLM à partir des thèses réelles. | À FAIRE | HAUTE |
 
 ---
 

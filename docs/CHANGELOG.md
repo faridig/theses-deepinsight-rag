@@ -1,5 +1,19 @@
 # Changelog - Theses-DeepInsight RAG
 
+## [1.7.0] - 2026-02-18
+### Ajouté
+- **Sprint 16 : Performance d'Ingestion Massive & Audit Holistique (PBI-024, 025, 026, 027, 028)**
+    - Nouveau script `scripts/ingest_theme.py` pour l'ingestion thématique automatisée à grande échelle.
+    - Script de simulation de trafic `scripts/simulate_traffic.py` combinant questions synthétiques et manuelles.
+    - Audit de qualité enrichi avec analyse de latence granulaire par étape (LLM, Embedding, Retriever).
+    - Robustesse accrue de l'extraction des traces Phoenix pour les évaluations Ragas.
+    - Nettoyage de la pollution console via une gestion fine des niveaux de log des dépendances.
+
+## 💡 LEÇONS APPRISES
+- **Instrumentation Phoenix/Ragas** : La récupération des traces Phoenix pour l'évaluation Ragas nécessite une sélection précise des spans de type `CHAIN` et un filtrage des entrées/sorties non textuelles (JSON) pour éviter les erreurs de parsing.
+- **Analyse de Latence Holistique** : L'intégration de l'analyse de latence par étape (`EMBEDDING`, `LLM`, `RERANKER`) directement dans le rapport d'audit permet d'identifier immédiatement les goulots d'étranglement sans outils externes.
+- **Simulation de Trafic Mixte** : Combiner des questions synthétiques (générées à partir des nœuds Qdrant via LLM) et des questions manuelles "gold standard" offre une couverture de test plus représentative du comportement utilisateur réel.
+
 ## [1.6.0] - 2026-02-17
 ### Ajouté
 - **Sprint 15 : Raffinement UI & Dynamisme Qdrant (PBI-035, 036, 037, 038)**

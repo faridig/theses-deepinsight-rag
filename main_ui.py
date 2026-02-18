@@ -84,10 +84,10 @@ async def start():
         # Envoi des éléments d'affichage (Text) via un message unique
         ui_elements = []
         
-        # Dashboard qualité
-        dashboard_element = await get_quality_dashboard_element()
-        if dashboard_element:
-            ui_elements.append(dashboard_element)
+        # Dashboard qualité (PBI-044)
+        quality_elements = await get_quality_dashboard_elements()
+        if quality_elements:
+            ui_elements.extend(quality_elements)
         else:
             ui_elements.append(cl.Text(
                 name="📊 Dashboard Qualité",
@@ -176,40 +176,72 @@ async def setup_agent(settings):
         cl.user_session.set("status_msg", new_status_msg)
         await new_status_msg.send()
 
-async def get_quality_dashboard_element():
+async def get_quality_dashboard_elements():
     """
-    Récupère le dernier rapport d'audit et retourne un élément cl.Text pour l'affichage.
+    Récupère le dernier rapport d'audit et retourne des éléments cl.Text pour l'affichage.
+    (PBI-044 : Dashboard de Confiance)
     """
     audit_dir = "docs/AUDITS"
     if not os.path.exists(audit_dir):
-        return None
+        return []
         
     audit_files = sorted([f for f in os.listdir(audit_dir) if f.startswith("audit_") and f.endswith(".md")], reverse=True)
     if not audit_files:
-        return None
+        return []
         
     latest_audit = audit_files[0]
+    elements = []
+    
     try:
         with open(os.path.join(audit_dir, latest_audit), "r", encoding="utf-8") as f:
             content = f.read()
             
-        # Extraction robuste du résumé (PBI-Fix)
-        # On cherche la section quel que soit le nombre de sauts de ligne
+        # 1. Extraction du score de Faithfulness pour le badge de confiance
         import re
-        match = re.search(r"## Résumé des Scores Ragas\s+(.*?)(?=\n##|$)", content, re.DOTALL)
-        if match:
-            summary = match.group(1).strip()
-            return cl.Text(
-                name="📊 Dashboard Qualité",
-                content=f"Dernier Audit ({latest_audit}):\n\n{summary}\n\n*Crash Test = Synthétique*\n*Live = Traces réelles*",
+        import ast
+        
+        # Regex améliorée pour capturer le dictionnaire Global (PBI-044 Fix)
+        global_match = re.search(r"\| Global \| (\{.*?\}) \|", content)
+        if global_match:
+            try:
+                # Évaluation sécurisée du dictionnaire Python présent dans le MD
+                scores_dict = ast.literal_eval(global_match.group(1))
+                faith_score = scores_dict.get('faithfulness', 0.0)
+                
+                percentage = faith_score * 100
+                
+                if faith_score == 0.0:
+                    elements.append(cl.Text(
+                        name="🛡️ Indice de Confiance",
+                        content="Score de fidélité : **Audit sur données complexes**\nStatut : 🚨 **Fidélité non mesurable**\n\n*L'échantillon testé n'a pas permis de valider la fidélité (score 0.0).*",
+                        display="side"
+                    ))
+                else:
+                    status = "Excellent" if faith_score > 0.85 else "Correct" if faith_score > 0.7 else "À surveiller"
+                    emoji = "✅" if faith_score > 0.85 else "⚠️" if faith_score > 0.7 else "🚨"
+                    
+                    elements.append(cl.Text(
+                        name="🛡️ Indice de Confiance",
+                        content=f"Score de fidélité : **{percentage:.1f}%**\nStatut : {emoji} **{status}**\n\n*Basé sur le dernier audit automatisé.*",
+                        display="side"
+                    ))
+            except Exception as parse_err:
+                logger.warning(f"Erreur lors du parsing du dictionnaire de scores : {parse_err}")
+
+        # 2. Extraction du résumé complet
+        summary_match = re.search(r"## Résumé des Scores Ragas\s+(.*?)(?=\n##|$)", content, re.DOTALL)
+        if summary_match:
+            summary = summary_match.group(1).strip()
+            elements.append(cl.Text(
+                name="📊 Détails Qualité Ragas",
+                content=f"Rapport : `{latest_audit}`\n\n{summary}",
                 display="side"
-            )
-        else:
-            logger.warning(f"Section 'Résumé des Scores Ragas' non trouvée dans {latest_audit}")
+            ))
+            
     except Exception as e:
         logger.warning(f"Erreur lors de la lecture de l'audit : {e}")
         
-    return None
+    return elements
 
 @cl.on_message
 async def main(message: cl.Message):
@@ -267,7 +299,13 @@ async def main(message: cl.Message):
     if source_refs:
         answer_text += "\n\n**Sources :** " + ", ".join([f"[{ref}]" for ref in source_refs])
     
-    # Envoi de la réponse avec les sources
+    # 3. Dashboard qualité persistant (PBI-044 Fix)
+    # On rajoute les éléments de confiance à chaque message pour qu'ils restent visibles
+    quality_elements = await get_quality_dashboard_elements()
+    if quality_elements:
+        elements.extend(quality_elements)
+
+    # Envoi de la réponse avec les sources et le dashboard
     await cl.Message(
         content=answer_text,
         elements=elements

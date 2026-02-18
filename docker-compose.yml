@@ -33,12 +33,23 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - MINIO_BUCKET=theses-data
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:6006/v1/traces
+      - OTEL_SERVICE_NAME=theses-rag-ui
     depends_on:
       - qdrant
       - minio
+      - phoenix
     volumes:
       - ./data:/app/data
       - ./docs:/app/docs
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"
+    environment:
+      - PHOENIX_PORT=6006
+      - PHOENIX_HOST=0.0.0.0
 
 volumes:
   qdrant_data:

@@ -36,14 +36,16 @@ def setup_phoenix_instrumentation():
             tracer_provider = trace_sdk.TracerProvider()
             trace.set_tracer_provider(tracer_provider)
         else:
-            # Configuration de l'export OTLP vers Phoenix (port par défaut: 6006)
-            # Note: Phoenix doit être lancé sur http://localhost:6006
-            endpoint = "http://localhost:6006/v1/traces"
+            # Configuration de l'export OTLP vers Phoenix
+            # Priorité aux variables d'environnement standard OTEL
+            endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:6006/v1/traces")
             
             # Création du tracer provider avec export OTLP
             tracer_provider = trace_sdk.TracerProvider()
             
             try:
+                # Si l'endpoint ne finit pas par /v1/traces et qu'on utilise OTLPSpanExporter (HTTP),
+                # on pourrait avoir des problèmes, mais OTLPSpanExporter gère souvent la base.
                 span_exporter = OTLPSpanExporter(endpoint=endpoint)
                 span_processor = SimpleSpanProcessor(span_exporter=span_exporter)
                 tracer_provider.add_span_processor(span_processor=span_processor)
