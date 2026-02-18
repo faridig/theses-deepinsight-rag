@@ -3,12 +3,12 @@ import sys
 import json
 import logging
 import chainlit as cl
+import phoenix as px
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from llama_index.core import Settings
-from llama_index.core.callbacks import CallbackManager
 from chainlit.llama_index.callbacks import LlamaIndexCallbackHandler
 
 # Configuration du moteur RAG
@@ -27,37 +27,149 @@ async def start():
     setup_settings()
     
     # Intégration du handler Chainlit pour LlamaIndex (Nested Steps)
+    # On ajoute le handler de Chainlit au manager existant (qui contient Phoenix)
+    # au lieu de tout écraser (PBI-Fix Phoenix Tracing)
     callback_handler = LlamaIndexCallbackHandler()
-    Settings.callback_manager = CallbackManager([callback_handler])
+    Settings.callback_manager.add_handler(callback_handler)
     
     try:
         # Initialisation du moteur RAG
         engine = RAGEngine()
         cl.user_session.set("query_engine", engine)
         
-        # Éléments de l'interface (PBI-031/032)
-        elements = [
-            cl.Text(
-                name="Observabilité",
-                content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
-                display="side"
+        # Vérification de la santé de l'infrastructure (Audit-Fix)
+        try:
+            svc = engine._get_vector_service(engine.default_collection)
+            if not svc.ping():
+                logger.error("Infrastructure Qdrant non disponible au démarrage.")
+                await cl.Message(
+                    content="❌ **ERREUR CRITIQUE** : Le serveur de base de données (Qdrant) est injoignable.\n\n"
+                            "L'application nécessite Qdrant pour fonctionner. "
+                            "Veuillez démarrer vos services (`docker-compose up -d`) et rafraîchir la page."
+                ).send()
+                return
+        except Exception as e:
+            logger.error(f"Erreur lors du ping Qdrant : {e}")
+            await cl.Message(content=f"Erreur critique d'infrastructure : {e}").send()
+            return
+
+        # Détection dynamique des thèmes (PBI-035)
+        themes = engine.get_available_themes()
+
+        # Construction des éléments de la barre latérale
+        from chainlit.input_widget import InputWidget
+        
+        sidebar_widgets: list[InputWidget] = [
+            cl.input_widget.Select(
+                id="Theme",
+                label="Domaine d'étude",
+                values=themes if themes else ["Aucun thème disponible"],
+                initial_index=0
             )
         ]
+
+        # Envoi des paramètres de la barre latérale
+        settings = await cl.ChatSettings(sidebar_widgets).send()
         
-        # Dashboard Qualité
+        selected_theme = settings.get("Theme")
+        if selected_theme == "Aucun thème disponible":
+            selected_theme = None
+        cl.user_session.set("theme", selected_theme)
+        
+        # Envoi des éléments d'affichage (Text) via un message unique
+        ui_elements = []
+        
+        # Dashboard qualité
         dashboard_element = await get_quality_dashboard_element()
         if dashboard_element:
-            elements.append(dashboard_element)
+            ui_elements.append(dashboard_element)
+        else:
+            ui_elements.append(cl.Text(
+                name="📊 Dashboard Qualité",
+                content="Aucun rapport d'audit trouvé dans `docs/AUDITS/`.",
+                display="side"
+            ))
             
-        # Message de bienvenue personnalisé avec les éléments attachés
+        # Lien d'observabilité
+        ui_elements.append(cl.Text(
+            name="Observabilité",
+            content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
+            display="side"
+        ))
+        
+        # Envoi groupé des éléments side (Fix for_id crash)
         await cl.Message(
-            content="Moteur DeepInsight prêt. Posez vos questions sur les thèses. (Cliquez sur les sources dans la barre latérale pour plus de détails)",
-            elements=elements
+            content="Système initialisé.",
+            elements=ui_elements,
+            author="Système"
         ).send()
         
+        # Stats du thème
+        stats_info = ""
+        if selected_theme:
+            stats = engine.get_theme_stats(selected_theme)
+            points_count = stats.get('points_count', 0)
+            status = stats.get('status', 'unknown')
+            
+            if points_count == 0:
+                if status == 'error':
+                    stats_info = f"\n⚠️ **Attention**: La collection '{selected_theme}' est inaccessible ou n'existe pas."
+                else:
+                    stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés. (Collection vide)"
+            else:
+                stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés."
+
+        # Message de bienvenue (indépendant de la sidebar)
+        theme_display = selected_theme if selected_theme else "Aucun (recherche globale)"
+        status_msg = cl.Message(
+            content=f"Moteur DeepInsight prêt. Thème actif : **{theme_display}**.{stats_info}\nPosez vos questions sur les thèses."
+        )
+        await status_msg.send()
+        cl.user_session.set("status_msg", status_msg)
+            
     except Exception as e:
         logger.error(f"Erreur d'initialisation : {e}")
         await cl.Message(content=f"Erreur d'initialisation du moteur : {e}").send()
+
+@cl.on_settings_update
+async def setup_agent(settings):
+    """
+    Mise à jour du thème lors du changement dans l'UI.
+    """
+    new_theme = settings.get("Theme")
+    # Si aucun thème n'est disponible, on utilise une valeur par défaut
+    if new_theme == "Aucun thème disponible":
+        new_theme = None
+    cl.user_session.set("theme", new_theme)
+    
+    engine = cl.user_session.get("query_engine")
+    stats_info = ""
+    if engine and new_theme:
+        stats = engine.get_theme_stats(new_theme)
+        points_count = stats.get('points_count', 0)
+        status = stats.get('status', 'unknown')
+        
+        if points_count == 0:
+            if status == 'error':
+                stats_info = f"\n⚠️ **Attention**: La collection '{new_theme}' est inaccessible ou n'existe pas."
+            else:
+                stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés. (Collection vide)"
+        else:
+            stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés."
+
+    # Gestion propre de la notification de changement (PBI-Review)
+    # On utilise un message éphémère ou on met à jour le dernier message de statut
+    status_msg = cl.user_session.get("status_msg")
+    theme_display = new_theme if new_theme else "Aucun (recherche globale)"
+    content = f"Domaine de recherche mis à jour : **{theme_display}**.{stats_info}"
+    
+    if status_msg:
+        status_msg.content = content
+        await status_msg.update()
+    else:
+        new_status_msg = cl.Message(content=content)
+        cl.user_session.set("status_msg", new_status_msg)
+        await new_status_msg.send()
 
 async def get_quality_dashboard_element():
     """
@@ -76,15 +188,19 @@ async def get_quality_dashboard_element():
         with open(os.path.join(audit_dir, latest_audit), "r", encoding="utf-8") as f:
             content = f.read()
             
-        # Extraction sommaire du tableau des scores
-        scores_section = "## Résumé des Scores Ragas\n\n"
-        if scores_section in content:
-            summary = content.split(scores_section)[1].split("##")[0]
+        # Extraction robuste du résumé (PBI-Fix)
+        # On cherche la section quel que soit le nombre de sauts de ligne
+        import re
+        match = re.search(r"## Résumé des Scores Ragas\s+(.*?)(?=\n##|$)", content, re.DOTALL)
+        if match:
+            summary = match.group(1).strip()
             return cl.Text(
                 name="📊 Dashboard Qualité",
                 content=f"Dernier Audit ({latest_audit}):\n\n{summary}\n\n*Crash Test = Synthétique*\n*Live = Traces réelles*",
                 display="side"
             )
+        else:
+            logger.warning(f"Section 'Résumé des Scores Ragas' non trouvée dans {latest_audit}")
     except Exception as e:
         logger.warning(f"Erreur lors de la lecture de l'audit : {e}")
         
@@ -96,13 +212,28 @@ async def main(message: cl.Message):
     Gestion des messages utilisateurs.
     """
     engine = cl.user_session.get("query_engine")
+    theme = cl.user_session.get("theme")
+    
     if not engine:
         await cl.Message(content="Le moteur n'est pas initialisé.").send()
         return
 
-    # Exécution de la requête via RAG
-    response = await engine.aask(message.content)
+    # Exécution de la requête via RAG avec le thème sélectionné (PBI-036)
+    response = await engine.aask(message.content, theme=theme)
     
+    # Récupération de l'ID du span Phoenix actuel (pour PBI-033/Phoenix integration)
+    # LlamaIndex stocke les IDs dans le callback manager si instrumenté
+    # On va tenter de récupérer l'ID de trace pour le lier au message Chainlit
+    # Note: En mode asynchrone, le span_id peut être récupéré via openinference
+    try:
+        from opentelemetry import trace
+        span = trace.get_current_span()
+        if span and span.get_span_context().is_valid:
+            trace_id = span.get_span_context().trace_id
+            cl.user_session.set(f"trace_{response.response[:20]}", format(trace_id, '032x'))
+    except Exception:
+        pass
+
     # Préparation de la réponse (On retire la liste brute des sources car on va utiliser les éléments)
     answer_text = str(response).split("\n\nSources :")[0]
     
@@ -139,11 +270,12 @@ async def main(message: cl.Message):
         elements=elements
     ).send()
 
-# PBI-033: Boucle de Feedback Humain
+# PBI-033: Boucle de Feedback Humain (Intégration Phoenix)
 @cl.on_feedback
 async def process_feedback(feedback):
     """
-    Stockage des feedbacks utilisateurs dans data/feedbacks.json.
+    Stockage des feedbacks utilisateurs dans data/feedbacks.json 
+    ET envoi vers Arize Phoenix (PBI-033).
     """
     feedback_data = {
         "message_id": feedback.forId,
@@ -154,6 +286,26 @@ async def process_feedback(feedback):
     
     logger.info(f"Feedback reçu : {feedback_data}")
     
+    # 1. Envoi vers Arize Phoenix
+    try:
+        px_client = px.Client()
+        # Envoi de l'évaluation à Phoenix (Doit être une liste)
+        px_client.log_evaluations(
+            [
+                px.Evaluation(
+                    name="Human Feedback",
+                    label=feedback.value,
+                    score=1 if feedback.value == "thumbs-up" else 0,
+                    explanation=feedback.comment or "No comment provided",
+                    metadata={"message_id": feedback.forId}
+                )
+            ]
+        )
+        logger.info(f"Feedback ({feedback.value}) envoyé à Arize Phoenix")
+    except Exception as e:
+        logger.warning(f"Échec de l'envoi du feedback à Phoenix : {e}")
+
+    # 2. Stockage local JSON (Sécurité)
     file_path = "data/feedbacks.json"
     os.makedirs("data", exist_ok=True)
     

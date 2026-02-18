@@ -24,25 +24,21 @@ def generate_synthetic_dataset():
     setup_settings()
     
     try:
-        # Lecture des documents (Priorité local data/ pour le test)
-        if os.path.exists("data/sample.pdf"):
-            logger.info("Utilisation du document local data/sample.pdf...")
-            reader = SimpleDirectoryReader(input_files=["data/sample.pdf"])
-        else:
-            bucket = os.getenv("MINIO_BUCKET", "theses-data")
-            endpoint_url = os.getenv("MINIO_ENDPOINT_URL", "http://localhost:9000")
-            access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-            secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-            
-            logger.info(f"Connexion à MinIO sur {endpoint_url} pour charger les documents...")
-            fs = S3FileSystem(
-                key=access_key,
-                secret=secret_key,
-                endpoint_url=endpoint_url,
-                use_ssl=os.getenv("MINIO_USE_SSL", "False").lower() == "true"
-            )
-            input_dir = f"{bucket}/pdfs"
-            reader = SimpleDirectoryReader(input_dir=input_dir, fs=fs)
+        # PBI-038 : Suppression de la dépendance à data/sample.pdf
+        bucket = os.getenv("MINIO_BUCKET", "theses-data")
+        endpoint_url = os.getenv("MINIO_ENDPOINT_URL", "http://localhost:9000")
+        access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+        secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+        
+        logger.info(f"Connexion à MinIO sur {endpoint_url} pour charger les documents...")
+        fs = S3FileSystem(
+            key=access_key,
+            secret=secret_key,
+            endpoint_url=endpoint_url,
+            use_ssl=os.getenv("MINIO_USE_SSL", "False").lower() == "true"
+        )
+        input_dir = f"{bucket}/pdfs"
+        reader = SimpleDirectoryReader(input_dir=input_dir, fs=fs)
 
         documents = reader.load_data()
         

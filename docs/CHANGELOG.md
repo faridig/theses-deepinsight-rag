@@ -1,5 +1,20 @@
 # Changelog - Theses-DeepInsight RAG
 
+## [1.6.0] - 2026-02-17
+### Ajouté
+- **Sprint 15 : Raffinement UI & Dynamisme Qdrant (PBI-035, 036, 037, 038)**
+    - Mapping dynamique des thèmes via `VectorService.list_collections()` avec filtrage technique.
+    - Sélecteur de domaine intelligent dans la barre latérale Chainlit avec gestion de fallback.
+    - Indicateurs de volume de collection (points indexés) affichés au démarrage et au changement de thème.
+    - Messages d'alerte explicites pour les collections vides ou inaccessibles.
+    - Nettoyage intégral des dépendances aux données de test (`sample.pdf`, `data/test`) dans le code de production.
+    - Optimisation de la structure `cl.ChatSettings` pour une séparation propre entre widgets et éléments d'affichage.
+
+## 💡 LEÇONS APPRISES
+- **Détection Dynamique Qdrant** : L'utilisation de `client.get_collections()` nécessite un filtrage rigoureux (Regex ou préfixe) pour éviter de polluer l'UI avec des collections de test ou des snapshots persistants.
+- **Récupération des Stats (PBI-037)** : La propriété `points_count` de `get_collection` peut varier ou être `None` selon l'état d'indexation (optimisation en cours). Utiliser `getattr(info, "points_count", 0)` garantit la robustesse du code UI.
+- **UX Chainlit** : Ne pas mélanger `cl.ChatSettings` (widgets interactifs) et `cl.Text.send()` (éléments d'affichage) au démarrage permet de garder une barre latérale claire et réactive.
+
 ## [1.5.0] - 2026-02-16
 ### Ajouté
 - **Sprint 14 : Visualisation & Auto-Évaluation (PBI-030, 031, 032, 033, 034)**

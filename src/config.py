@@ -1,7 +1,7 @@
 import os
 import logging
 from dotenv import load_dotenv
-from llama_index.core import Settings
+from llama_index.core import Settings, set_global_handler
 import llama_index.llms.openai
 import llama_index.embeddings.openai
 from llama_index.core.llms import MockLLM
@@ -9,8 +9,17 @@ from llama_index.core.embeddings import MockEmbedding
 
 logger = logging.getLogger(__name__)
 
+# Initialisation de l'instrumentation Phoenix (Audit-Fix)
+try:
+    set_global_handler("arize_phoenix")
+    logger.info("Instrumentation Arize Phoenix activée via set_global_handler")
+except Exception as e:
+    logger.warning(f"Impossible d'activer l'instrumentation Phoenix : {e}")
+
 # Silence technique (PBI-027)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("engineio").setLevel(logging.WARNING)
+logging.getLogger("socketio").setLevel(logging.WARNING)
 
 # Normalisation des thèmes (PBI-026/Review)
 CANONICAL_THEMES = {

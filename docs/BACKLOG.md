@@ -42,7 +42,15 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-027** | **Seeding Multi-Domaines & Validation PDF** | Ingestion massive de thèses avec validation d'intégrité et gestion des erreurs. | DONE | HAUTE |
 | **PBI-028** | **Hygiène des Données : Dédoublonnage & Santé** | Mise en place du hashing ID pour éviter les doublons et dashboard de statut. | DONE | MOYENNE |
 | **PBI-013** | **Nightly Audit Ragas** | Pipeline d'évaluation auto sur traces Phoenix réelles. | DONE | HAUTE |
-| **PBI-030** | **Dataset de Test Synthétique** | Génération automatique de questions/réponses via Ragas. | EN ATTENTE | HAUTE |
+| **PBI-030** | **Dataset de Test Synthétique** | Génération Q/A via `RagDatasetGenerator` (LlamaIndex). | DONE | HAUTE |
+| **PBI-031** | **Interface Chainlit (MVP)** | WebApp conversationnelle avec visualisation des sources et CoT. | DONE | HAUTE |
+| **PBI-032** | **Intégration Traces Phoenix** | Accès direct aux traces Arize Phoenix depuis l'interface. | DONE | MOYENNE |
+| **PBI-033** | **Boucle de Feedback Humain** | Système de vote (👍/👎) Chainlit pour collecte de données. | DONE | MOYENNE |
+| **PBI-034** | **Dockerisation de l'UI** | Conteneurisation de Chainlit pour déploiement complet. | DONE | BASSE |
+| **PBI-035** | **Mapping Dynamique Qdrant** | Service de découverte automatique des collections/thèmes existants. | EN COURS | HAUTE |
+| **PBI-036** | **Sélecteur de Domaine UI** | Menu interactif Chainlit pour router les questions vers le bon thème. | EN ATTENTE | HAUTE |
+| **PBI-037** | **Indicateurs de Volume Data** | Affichage dynamique du compteur de documents par thème dans l'UI. | EN ATTENTE | MOYENNE |
+| **PBI-038** | **Nettoyage Code Legacy (Sample)** | Suppression des dépendances aux fichiers PDF de test locaux. | EN ATTENTE | MOYENNE |
 
 ---
 
@@ -52,6 +60,7 @@ Tout ticket entrant en Sprint doit comporter :
 - Critères d'Acceptation (Gherkin).
 - Estimation (XS à L).
 - Justification technologique (context7).
+- **Nouveauté Sprint 14** : Utilisation préférentielle des outils natifs LlamaIndex pour la génération de données.
 
 ---
-*Dernière mise à jour : 15/02/2026*
+*Dernière mise à jour : 16/02/2026*
