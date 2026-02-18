@@ -3,7 +3,6 @@ import sys
 import json
 import logging
 import random
-from typing import List
 from dotenv import load_dotenv
 from llama_index.core import Settings
 from llama_index.core.llama_dataset.generator import RagDatasetGenerator

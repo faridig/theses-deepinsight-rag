@@ -4,7 +4,6 @@ import socket
 import logging
 from src.config import setup_settings
 import phoenix as px
-from llama_index.core import set_global_handler
 from src.generation.rag_engine import RAGEngine
 
 # Initialisation des variables d'environnement et paramètres globaux
