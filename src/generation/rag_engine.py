@@ -97,22 +97,40 @@ class NodeCleaningProcessor(BaseNodePostprocessor):
 
 class DiversityPostprocessor(BaseNodePostprocessor):
     """
-    Assure la diversité des sources (PBI-015).
+    Assure la diversité des sources tout en permettant plusieurs extraits 
+    par document si la pertinence est élevée (PBI-015/Review).
     """
-    target_top_n: int = 3
+    target_top_n: int = 5
+    max_per_doc: int = 2
+
+    def __init__(self, target_top_n: Optional[int] = None, max_per_doc: Optional[int] = None, **kwargs):
+        """
+        Initialise le post-processeur avec des paramètres optionnels.
+        """
+        super().__init__(**kwargs)
+        if target_top_n is not None:
+            self.target_top_n = target_top_n
+        if max_per_doc is not None:
+            self.max_per_doc = max_per_doc
 
     def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
-        unique_docs = {}
+        doc_counts = {}
+        filtered_nodes = []
+        
         for node_with_score in nodes:
             doc_id = node_with_score.node.metadata.get("titre") or \
                      node_with_score.node.metadata.get("file_name") or \
                      node_with_score.node.node_id
             
-            if doc_id not in unique_docs:
-                unique_docs[doc_id] = node_with_score
+            count = doc_counts.get(doc_id, 0)
+            if count < self.max_per_doc:
+                filtered_nodes.append(node_with_score)
+                doc_counts[doc_id] = count + 1
             
-        filtered_nodes = list(unique_docs.values())
-        return filtered_nodes[:self.target_top_n]
+            if len(filtered_nodes) >= self.target_top_n:
+                break
+                
+        return filtered_nodes
 
 class RAGEngine:
     """

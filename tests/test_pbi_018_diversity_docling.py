@@ -11,23 +11,36 @@ class TestDiversityDocling:
         # Nodes avec file_name au lieu de titre
         node1 = TextNode(text="Frag 1 Doc A", metadata={"file_name": "these_a.pdf"})
         node2 = TextNode(text="Frag 2 Doc A", metadata={"file_name": "these_a.pdf"})
-        node3 = TextNode(text="Frag 1 Doc B", metadata={"file_name": "these_b.pdf"})
+        node3 = TextNode(text="Frag 3 Doc A", metadata={"file_name": "these_a.pdf"})  # Troisième fragment
+        node4 = TextNode(text="Frag 1 Doc B", metadata={"file_name": "these_b.pdf"})
         
         nodes = [
             NodeWithScore(node=node1, score=0.9),
             NodeWithScore(node=node2, score=0.85),
             NodeWithScore(node=node3, score=0.8),
+            NodeWithScore(node=node4, score=0.7),
         ]
         
-        # On veut 2 thèses différentes
-        processor = DiversityPostprocessor(target_top_n=2)
+        # On veut jusqu'à 2 extraits par document
+        processor = DiversityPostprocessor(target_top_n=4)  # On veut voir tous les nodes possibles
         filtered_nodes = processor._postprocess_nodes(nodes)
         
-        assert len(filtered_nodes) == 2
+        # Avec max_per_doc=2 et target_top_n=4, on devrait avoir:
+        # - 2 extraits de these_a.pdf (les 2 meilleurs: 0.9 et 0.85)
+        # - 1 extrait de these_b.pdf (0.7)
+        # Total: 3 nodes (le troisième A est rejeté)
+        assert len(filtered_nodes) == 3
+        
         file_names = [n.node.metadata["file_name"] for n in filtered_nodes]
-        assert "these_a.pdf" in file_names
+        assert file_names.count("these_a.pdf") == 2  # 2 extraits de these_a.pdf
         assert "these_b.pdf" in file_names
-        assert file_names.count("these_a.pdf") == 1
+        
+        # Vérifier que les 2 meilleurs de A sont inclus
+        a_nodes = [n for n in filtered_nodes if n.node.metadata["file_name"] == "these_a.pdf"]
+        assert len(a_nodes) == 2
+        a_scores = [n.score for n in a_nodes]
+        assert 0.9 in a_scores  # Meilleur score de A
+        assert 0.85 in a_scores  # Deuxième meilleur score de A
 
     def test_diversity_mixed_metadata(self):
         """

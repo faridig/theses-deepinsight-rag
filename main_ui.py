@@ -15,6 +15,11 @@ from chainlit.llama_index.callbacks import LlamaIndexCallbackHandler
 from src.generation.rag_engine import RAGEngine
 from src.config import setup_settings
 
+# Initialisation Globale de l'instrumentation Phoenix (Bug Fix)
+# Note: L'instrumentation est maintenant configurée dans src/config.py
+# via setup_phoenix_instrumentation() qui est appelée par setup_settings()
+logging.info("Instrumentation Phoenix configurée via src/config.py")
+
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Chainlit-UI")
@@ -222,14 +227,12 @@ async def main(message: cl.Message):
     response = await engine.aask(message.content, theme=theme)
     
     # Récupération de l'ID du span Phoenix actuel (pour PBI-033/Phoenix integration)
-    # LlamaIndex stocke les IDs dans le callback manager si instrumenté
-    # On va tenter de récupérer l'ID de trace pour le lier au message Chainlit
-    # Note: En mode asynchrone, le span_id peut être récupéré via openinference
+    # Avec OpenInference, on utilise l'API OpenTelemetry standard
     try:
         from opentelemetry import trace
-        span = trace.get_current_span()
-        if span and span.get_span_context().is_valid:
-            trace_id = span.get_span_context().trace_id
+        current_span = trace.get_current_span()
+        if current_span and current_span.get_span_context().is_valid:
+            trace_id = current_span.get_span_context().trace_id
             cl.user_session.set(f"trace_{response.response[:20]}", format(trace_id, '032x'))
     except Exception:
         pass
@@ -289,17 +292,24 @@ async def process_feedback(feedback):
     # 1. Envoi vers Arize Phoenix
     try:
         px_client = px.Client()
-        # Envoi de l'évaluation à Phoenix (Doit être une liste)
+        # Envoi de l'évaluation à Phoenix (API moderne avec SpanEvaluations)
+        import pandas as pd
+        from phoenix.trace import SpanEvaluations
+        
+        # Création d'un DataFrame pour l'évaluation
+        eval_df = pd.DataFrame([{
+            "span_id": feedback.forId,
+            "label": feedback.value,
+            "score": 1.0 if feedback.value == "thumbs-up" else 0.0,
+            "explanation": feedback.comment or "No comment provided",
+            "metadata": json.dumps({"message_id": feedback.forId})
+        }])
+        
         px_client.log_evaluations(
-            [
-                px.Evaluation(
-                    name="Human Feedback",
-                    label=feedback.value,
-                    score=1 if feedback.value == "thumbs-up" else 0,
-                    explanation=feedback.comment or "No comment provided",
-                    metadata={"message_id": feedback.forId}
-                )
-            ]
+            SpanEvaluations(
+                dataframe=eval_df,
+                eval_name="Human Feedback"
+            )
         )
         logger.info(f"Feedback ({feedback.value}) envoyé à Arize Phoenix")
     except Exception as e:

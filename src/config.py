@@ -1,7 +1,8 @@
 import os
+import sys
 import logging
 from dotenv import load_dotenv
-from llama_index.core import Settings, set_global_handler
+from llama_index.core import Settings
 import llama_index.llms.openai
 import llama_index.embeddings.openai
 from llama_index.core.llms import MockLLM
@@ -9,12 +10,60 @@ from llama_index.core.embeddings import MockEmbedding
 
 logger = logging.getLogger(__name__)
 
-# Initialisation de l'instrumentation Phoenix (Audit-Fix)
-try:
-    set_global_handler("arize_phoenix")
-    logger.info("Instrumentation Arize Phoenix activée via set_global_handler")
-except Exception as e:
-    logger.warning(f"Impossible d'activer l'instrumentation Phoenix : {e}")
+# Initialisation de l'instrumentation Phoenix via OpenInference (Bug Fix)
+def setup_phoenix_instrumentation():
+    """
+    Configure l'instrumentation OpenInference pour exporter les traces vers Phoenix.
+    """
+    try:
+        from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk import trace as trace_sdk
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        
+        # Détection du mode test - plusieurs méthodes
+        is_test_mode = (
+            os.getenv("IS_TESTING") == "1" or
+            os.getenv("PYTEST_CURRENT_TEST") is not None or
+            "pytest" in sys.modules or
+            "unittest" in sys.modules
+        )
+        
+        if is_test_mode:
+            logger.info("Mode test détecté - instrumentation simplifiée sans export OTLP")
+            # En mode test, on crée un tracer provider minimal sans export
+            tracer_provider = trace_sdk.TracerProvider()
+            trace.set_tracer_provider(tracer_provider)
+        else:
+            # Configuration de l'export OTLP vers Phoenix (port par défaut: 6006)
+            # Note: Phoenix doit être lancé sur http://localhost:6006
+            endpoint = "http://localhost:6006/v1/traces"
+            
+            # Création du tracer provider avec export OTLP
+            tracer_provider = trace_sdk.TracerProvider()
+            
+            try:
+                span_exporter = OTLPSpanExporter(endpoint=endpoint)
+                span_processor = SimpleSpanProcessor(span_exporter=span_exporter)
+                tracer_provider.add_span_processor(span_processor=span_processor)
+                trace.set_tracer_provider(tracer_provider)
+                logger.info(f"Export OTLP configuré vers {endpoint}")
+            except Exception as export_error:
+                logger.warning(f"Impossible de configurer l'export OTLP : {export_error}. "
+                              "Les traces seront générées localement mais non exportées.")
+        
+        # Instrumentation de LlamaIndex
+        LlamaIndexInstrumentor().instrument(tracer_provider=tracer_provider)
+        logger.info("Instrumentation Arize Phoenix activée via OpenInference")
+        
+    except ImportError as e:
+        logger.warning(f"OpenInference non disponible : {e}. Les traces Phoenix seront désactivées.")
+    except Exception as e:
+        logger.warning(f"Impossible d'activer l'instrumentation Phoenix : {e}")
+
+# Appel de la fonction d'instrumentation
+setup_phoenix_instrumentation()
 
 # Silence technique (PBI-027)
 logging.getLogger("httpx").setLevel(logging.WARNING)
