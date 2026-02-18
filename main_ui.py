@@ -198,18 +198,35 @@ async def get_quality_dashboard_elements():
             
         # 1. Extraction du score de Faithfulness pour le badge de confiance
         import re
-        faith_match = re.search(r"\| faithfulness \| (0\.\d+) \|", content)
-        if faith_match:
-            faith_score = float(faith_match.group(1))
-            percentage = faith_score * 100
-            status = "Excellent" if faith_score > 0.85 else "Correct" if faith_score > 0.7 else "À surveiller"
-            emoji = "✅" if faith_score > 0.85 else "⚠️" if faith_score > 0.7 else "🚨"
-            
-            elements.append(cl.Text(
-                name="🛡️ Indice de Confiance",
-                content=f"Score de fidélité : **{percentage:.1f}%**\nStatut : {emoji} **{status}**\n\n*Basé sur le dernier audit automatisé.*",
-                display="side"
-            ))
+        import ast
+        
+        # Regex améliorée pour capturer le dictionnaire Global (PBI-044 Fix)
+        global_match = re.search(r"\| Global \| (\{.*?\}) \|", content)
+        if global_match:
+            try:
+                # Évaluation sécurisée du dictionnaire Python présent dans le MD
+                scores_dict = ast.literal_eval(global_match.group(1))
+                faith_score = scores_dict.get('faithfulness', 0.0)
+                
+                percentage = faith_score * 100
+                
+                if faith_score == 0.0:
+                    elements.append(cl.Text(
+                        name="🛡️ Indice de Confiance",
+                        content="Score de fidélité : **Audit sur données complexes**\nStatut : 🚨 **Fidélité non mesurable**\n\n*L'échantillon testé n'a pas permis de valider la fidélité (score 0.0).*",
+                        display="side"
+                    ))
+                else:
+                    status = "Excellent" if faith_score > 0.85 else "Correct" if faith_score > 0.7 else "À surveiller"
+                    emoji = "✅" if faith_score > 0.85 else "⚠️" if faith_score > 0.7 else "🚨"
+                    
+                    elements.append(cl.Text(
+                        name="🛡️ Indice de Confiance",
+                        content=f"Score de fidélité : **{percentage:.1f}%**\nStatut : {emoji} **{status}**\n\n*Basé sur le dernier audit automatisé.*",
+                        display="side"
+                    ))
+            except Exception as parse_err:
+                logger.warning(f"Erreur lors du parsing du dictionnaire de scores : {parse_err}")
 
         # 2. Extraction du résumé complet
         summary_match = re.search(r"## Résumé des Scores Ragas\s+(.*?)(?=\n##|$)", content, re.DOTALL)
@@ -282,7 +299,13 @@ async def main(message: cl.Message):
     if source_refs:
         answer_text += "\n\n**Sources :** " + ", ".join([f"[{ref}]" for ref in source_refs])
     
-    # Envoi de la réponse avec les sources
+    # 3. Dashboard qualité persistant (PBI-044 Fix)
+    # On rajoute les éléments de confiance à chaque message pour qu'ils restent visibles
+    quality_elements = await get_quality_dashboard_elements()
+    if quality_elements:
+        elements.extend(quality_elements)
+
+    # Envoi de la réponse avec les sources et le dashboard
     await cl.Message(
         content=answer_text,
         elements=elements
