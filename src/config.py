@@ -18,6 +18,8 @@ except Exception as e:
 
 # Silence technique (PBI-027)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("engineio").setLevel(logging.WARNING)
+logging.getLogger("socketio").setLevel(logging.WARNING)
 
 # Normalisation des thèmes (PBI-026/Review)
 CANONICAL_THEMES = {
