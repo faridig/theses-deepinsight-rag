@@ -63,6 +63,11 @@ def setup_observability():
         print("ℹ️ Observabilité désactivée par DISABLE_PHOENIX=1")
         return
 
+    # Si on est dans un conteneur (détecté par une variable d'env), on ne lance pas Phoenix localement
+    if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") and "localhost" not in os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", ""):
+        print(f"ℹ️ Phoenix OTLP configuré vers {os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT')}")
+        return
+
     try:
         UI_PORT = 6006
         GRPC_PORT = 4317
@@ -73,19 +78,17 @@ def setup_observability():
         
         if is_occupied:
             if is_phoenix_healthy(UI_PORT):
-                print(f"ℹ️ Phoenix sain détecté sur le port {GRPC_PORT} (Multi-Stack). Connexion.")
-                set_global_handler("arize_phoenix")
+                print(f"ℹ️ Phoenix sain détecté sur le port {GRPC_PORT} (Multi-Stack).")
                 return
             else:
                 logging.warning(f"Incident gRPC Port {GRPC_PORT} : [IPv4:{report['ipv4']}, IPv6:{report['ipv6']}, Bindable:{report['bindable']}]")
                 logging.warning(f"Détail : {report['error']}")
-                logging.warning("Désactivation de l'instrumentation pour éviter tout conflit.")
                 return
 
-        # Tentative de lancement
+        # Tentative de lancement (uniquement si local et non lancé)
+        print("🚀 Lancement de Phoenix local...")
         px.launch_app()
-        set_global_handler("arize_phoenix")
-        print("✅ Observabilité Phoenix activée (http://localhost:6006)")
+        print("✅ Observabilité Phoenix lancée (http://localhost:6006)")
         
     except Exception as e:
         print(f"❌ Observabilité ignorée : {e}")
