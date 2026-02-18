@@ -38,14 +38,20 @@ async def start():
         cl.user_session.set("query_engine", engine)
         
         # Vérification de la santé de l'infrastructure (Audit-Fix)
-        infra_ready = True
         try:
             svc = engine._get_vector_service(engine.default_collection)
             if not svc.ping():
-                infra_ready = False
-                logger.warning("Infrastructure Qdrant non disponible au démarrage.")
-        except Exception:
-            infra_ready = False
+                logger.error("Infrastructure Qdrant non disponible au démarrage.")
+                await cl.Message(
+                    content="❌ **ERREUR CRITIQUE** : Le serveur de base de données (Qdrant) est injoignable.\n\n"
+                            "L'application nécessite Qdrant pour fonctionner. "
+                            "Veuillez démarrer vos services (`docker-compose up -d`) et rafraîchir la page."
+                ).send()
+                return
+        except Exception as e:
+            logger.error(f"Erreur lors du ping Qdrant : {e}")
+            await cl.Message(content=f"Erreur critique d'infrastructure : {e}").send()
+            return
 
         # Détection dynamique des thèmes (PBI-035)
         themes = engine.get_available_themes()
@@ -53,18 +59,11 @@ async def start():
         # Construction des éléments de la barre latérale
         from chainlit.input_widget import InputWidget
         
-        # Si infra non prête, on affiche un avertissement clair
-        if not infra_ready:
-            await cl.Message(
-                content="⚠️ **Mode Dégradé** : Le serveur de base de données (Qdrant) est actuellement injoignable. "
-                        "Les fonctionnalités de recherche sont désactivées. Veuillez vérifier votre infrastructure."
-            ).send()
-        
         sidebar_widgets: list[InputWidget] = [
             cl.input_widget.Select(
                 id="Theme",
                 label="Domaine d'étude",
-                values=themes if (infra_ready and themes) else ["Aucun thème disponible"],
+                values=themes if themes else ["Aucun thème disponible"],
                 initial_index=0
             )
         ]
@@ -77,26 +76,32 @@ async def start():
             selected_theme = None
         cl.user_session.set("theme", selected_theme)
         
-        # Envoi des éléments d'affichage (Text) séparément
+        # Envoi des éléments d'affichage (Text) via un message unique
+        ui_elements = []
+        
         # Dashboard qualité
         dashboard_element = await get_quality_dashboard_element()
         if dashboard_element:
-            await dashboard_element.send()
+            ui_elements.append(dashboard_element)
         else:
-            # Création d'un élément Text sans for_id (élément indépendant)
-            await cl.Text(
+            ui_elements.append(cl.Text(
                 name="📊 Dashboard Qualité",
                 content="Aucun rapport d'audit trouvé dans `docs/AUDITS/`.",
-                display="side",
-                for_id=None
-            ).send()
+                display="side"
+            ))
             
         # Lien d'observabilité
-        await cl.Text(
+        ui_elements.append(cl.Text(
             name="Observabilité",
             content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
-            display="side",
-            for_id=None
+            display="side"
+        ))
+        
+        # Envoi groupé des éléments side (Fix for_id crash)
+        await cl.Message(
+            content="Système initialisé.",
+            elements=ui_elements,
+            author="Système"
         ).send()
         
         # Stats du thème
@@ -192,8 +197,7 @@ async def get_quality_dashboard_element():
             return cl.Text(
                 name="📊 Dashboard Qualité",
                 content=f"Dernier Audit ({latest_audit}):\n\n{summary}\n\n*Crash Test = Synthétique*\n*Live = Traces réelles*",
-                display="side",
-                for_id=None
+                display="side"
             )
         else:
             logger.warning(f"Section 'Résumé des Scores Ragas' non trouvée dans {latest_audit}")
@@ -253,8 +257,7 @@ async def main(message: cl.Message):
                 cl.Text(
                     name=source_name,
                     content=f"### {title}\n**Auteur**: {author}\n\n---\n\n**Extrait**:\n{content}",
-                    display="side",
-                    for_id=None
+                    display="side"
                 )
             )
     
