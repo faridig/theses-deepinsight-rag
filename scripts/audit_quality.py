@@ -148,12 +148,15 @@ def run_audit(dataset_path=None, collection=None):
         ensure_dir(report_dir)
         
         # Latency analysis
-        client = px.Client(endpoint="http://localhost:6006")
-        spans_df = client.get_spans_dataframe()
         avg_latencies = {}
-        if spans_df is not None and not spans_df.empty:
-            spans_df['duration'] = (spans_df['end_time'] - spans_df['start_time']).dt.total_seconds()
-            avg_latencies = spans_df.groupby('span_kind')['duration'].mean().to_dict()
+        try:
+            client = px.Client(endpoint="http://localhost:6006")
+            spans_df = client.get_spans_dataframe()
+            if spans_df is not None and not spans_df.empty:
+                spans_df['duration'] = (spans_df['end_time'] - spans_df['start_time']).dt.total_seconds()
+                avg_latencies = spans_df.groupby('span_kind')['duration'].mean().to_dict()
+        except Exception as e:
+            logger.warning(f"Impossible de récupérer les latences depuis Phoenix : {e}")
 
         with open(report_path, "w") as f:
             f.write(f"# 📊 Rapport d'Audit Holistique RAG\n")
