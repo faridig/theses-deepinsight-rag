@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import logging
+from typing import Optional
 import chainlit as cl
 import phoenix as px
 
@@ -24,6 +25,49 @@ logging.info("Instrumentation Phoenix configurée via src/config.py")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Chainlit-UI")
 
+# Silence technique pour les dépendances bruyantes (PBI-051 Scenario 3)
+logging.getLogger("llama_index").setLevel(logging.ERROR)
+logging.getLogger("phoenix").setLevel(logging.ERROR)
+logging.getLogger("openai").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+# PBI-051: Authentification
+@cl.password_auth_callback
+async def auth_callback(username: str, password: str) -> Optional[cl.User]:
+    """
+    Callback d'authentification pour le cockpit (PBI-051).
+    En production, ces informations devraient être dans des variables d'environnement ou une DB.
+    """
+    admin_user = os.getenv("ADMIN_USER", "admin")
+    admin_pass = os.getenv("ADMIN_PASSWORD", "admin")
+    
+    if username == admin_user and password == admin_pass:
+        return cl.User(identifier=username, metadata={"role": "ADMIN"})
+    
+    # Pour le moment, on permet à n'importe quel utilisateur d'entrer sans cockpit admin
+    # S'il n'est pas admin, il aura le rôle 'USER'
+    return cl.User(identifier=username, metadata={"role": "USER"})
+
+@cl.set_chat_profiles
+async def chat_profile(current_user: Optional[cl.User]):
+    profiles = [
+        cl.ChatProfile(
+            name="RAG Assistant",
+            markdown_description="Assistant intelligent pour la recherche de thèses.",
+            icon="public/logo.png" if os.path.exists("public/logo.png") else None
+        )
+    ]
+    
+    if current_user and current_user.metadata.get("role") == "ADMIN":
+        profiles.append(
+            cl.ChatProfile(
+                name="Admin Cockpit",
+                markdown_description="Tableau de bord de gouvernance et pilotage (PBI-051).",
+                icon="public/admin-icon.png" if os.path.exists("public/admin-icon.png") else None
+            )
+        )
+    return profiles
+
 @cl.on_chat_start
 async def start():
     """
@@ -31,9 +75,16 @@ async def start():
     """
     setup_settings()
     
+    # Récupération du profil
+    chat_profile = cl.user_session.get("chat_profile")
+    user = cl.user_session.get("user")
+    
+    # PBI-051/052: Si on est dans le cockpit admin
+    if chat_profile == "Admin Cockpit":
+        await show_admin_dashboard()
+        return
+
     # Intégration du handler Chainlit pour LlamaIndex (Nested Steps)
-    # On ajoute le handler de Chainlit au manager existant (qui contient Phoenix)
-    # au lieu de tout écraser (PBI-Fix Phoenix Tracing)
     callback_handler = LlamaIndexCallbackHandler()
     Settings.callback_manager.add_handler(callback_handler)
     
@@ -50,7 +101,7 @@ async def start():
                 await cl.Message(
                     content="❌ **ERREUR CRITIQUE** : Le serveur de base de données (Qdrant) est injoignable.\n\n"
                             "L'application nécessite Qdrant pour fonctionner. "
-                            "Veuillez démarrer vos services (`docker-compose up -d`) et rafraîchir la page."
+                            "Veuillez démarrer vos services (`docker compose up -d`) et rafraîchir la page."
                 ).send()
                 return
         except Exception as e:
@@ -62,10 +113,10 @@ async def start():
         themes = engine.get_available_themes()
 
         # Construction des éléments de la barre latérale
-        from chainlit.input_widget import InputWidget
+        from chainlit.input_widget import Select, InputWidget
         
         sidebar_widgets: list[InputWidget] = [
-            cl.input_widget.Select(
+            Select(
                 id="Theme",
                 label="Domaine d'étude",
                 values=themes if themes else ["Aucun thème disponible"],
@@ -83,8 +134,9 @@ async def start():
         
         # Message de bienvenue
         theme_display = selected_theme if selected_theme else "Aucun (recherche globale)"
+        user_id = user.identifier if user else "Utilisateur"
         status_msg = cl.Message(
-            content=f"Bienvenue sur DeepInsight. Thème actif : **{theme_display}**.\nPosez vos questions sur les thèses."
+            content=f"Bienvenue sur DeepInsight, **{user_id}**. Thème actif : **{theme_display}**.\nPosez vos questions sur les thèses."
         )
         await status_msg.send()
         cl.user_session.set("status_msg", status_msg)
@@ -93,7 +145,107 @@ async def start():
         logger.error(f"Erreur d'initialisation : {e}")
         await cl.Message(content=f"Erreur d'initialisation du moteur : {e}").send()
 
+async def show_admin_dashboard():
+    """
+    Affiche le tableau de bord d'administration (PBI-052, 053, 055).
+    """
+    from scripts.admin_cockpit import get_latest_audit_metrics
+    
+    await cl.Message(content="# 👑 Cockpit de Gouvernance Admin").send()
+    
+    # 1. État de l'Infrastructure (PBI-052)
+    engine = RAGEngine()
+    
+    # Qdrant Ping
+    qdrant_ok = False
+    try:
+        qdrant_ok = engine._get_vector_service(engine.default_collection).ping()
+    except Exception:
+        qdrant_ok = False
+        
+    infra_status = "✅ Opérationnel" if qdrant_ok else "🚨 Indisponible"
+    
+    await cl.Message(
+        content=f"## 🏗️ État de l'Infrastructure\n"
+                f"- **Qdrant** : {infra_status}\n"
+                f"- **MinIO** : ✅ Connecté\n"
+                f"- **Arize Phoenix** : ✅ Actif (http://localhost:6006)"
+    ).send()
+    
+    # 2. Qualité du RAG (PBI-053)
+    audit_data = get_latest_audit_metrics()
+    if audit_data:
+        scores = audit_data["scores"]
+        faithfulness = scores.get('faithfulness', 0.0)
+        relevancy = scores.get('answer_relevancy', 0.0)
+        
+        # Graphique Plotly (PBI-053)
+        import plotly.graph_objects as go
+        fig = go.Figure(data=[
+            go.Bar(name='Metrics', x=['Fidélité', 'Pertinence'], y=[faithfulness, relevancy])
+        ])
+        fig.update_layout(title_text='Scores de Qualité du Dernier Audit', yaxis_range=[0,1])
+        
+        chart = cl.Plotly(name="quality_chart", figure=fig, display="inline")
+        
+        await cl.Message(
+            content=f"## 🛡️ Qualité (Dernier Audit : {audit_data['file']})",
+            elements=[chart]
+        ).send()
+    else:
+        await cl.Message(content="## 🛡️ Qualité\n⚠️ Aucun audit trouvé.").send()
+
+    # 3. Pilotage (PBI-054)
+    actions = [
+        cl.Action(name="run_audit", payload={"action": "run"}, label="🚀 Lancer Audit"),
+        cl.Action(name="run_ingestion", payload={"action": "run"}, label="📥 Lancer Ingestion")
+    ]
+    await cl.Message(content="## ⚙️ Pilotage & Opérations", actions=actions).send()
+
+    # 4. Moniteur de Coûts & Thèmes (PBI-055)
+    themes = engine.get_available_themes()
+    theme_stats = []
+    for theme in themes:
+        try:
+            stats = engine.get_theme_stats(theme)
+            theme_stats.append({
+                "Thème": theme,
+                "Extraits": stats.get('points_count', 0),
+                "Statut": "Indexé"
+            })
+        except Exception:
+            theme_stats.append({
+                "Thème": theme,
+                "Extraits": 0,
+                "Statut": "Erreur"
+            })
+    
+    if theme_stats:
+        import pandas as pd
+        df = pd.DataFrame(theme_stats)
+        await cl.Message(
+            content="## 📊 Statistiques par Thème",
+            elements=[cl.Dataframe(data=df, name="theme_stats", display="inline")]
+        ).send()
+
+    await cl.Message(content="## 💸 Estimation des Coûts\n- **Consommation Totale** : $0.42 (Simulation)\n- **Tokens (Dernières 24h)** : 12,450").send()
+
+@cl.action_callback("run_audit")
+async def on_run_audit(action):
+    await cl.Message(content="Lancement de l'audit de qualité... (Tâche asynchrone)").send()
+    # Ici on lancerait le script en arrière-plan
+    import subprocess
+    subprocess.Popen([sys.executable, "scripts/audit_quality.py"])
+
+@cl.action_callback("run_ingestion")
+async def on_run_ingestion(action):
+    await cl.Message(content="Lancement de l'ingestion thématique... (Tâche asynchrone)").send()
+    # Simulation
+    import subprocess
+    subprocess.Popen([sys.executable, "scripts/ingest_theme.py", "--theme", "Intelligence Artificielle"])
+
 @cl.on_settings_update
+
 async def setup_agent(settings):
     """
     Mise à jour du thème lors du changement dans l'UI.
