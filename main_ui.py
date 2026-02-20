@@ -79,21 +79,50 @@ async def start():
     chat_profile = cl.user_session.get("chat_profile")
     user = cl.user_session.get("user")
     
+    # Initialisation du moteur RAG pour tous les profils (besoin des thèmes)
+    try:
+        engine = RAGEngine()
+        cl.user_session.set("query_engine", engine)
+        
+        # Détection dynamique des thèmes (PBI-035)
+        themes = engine.get_available_themes()
+
+        # Construction des éléments de la barre latérale
+        from chainlit.input_widget import Select, InputWidget
+        
+        sidebar_widgets: list[InputWidget] = [
+            Select(
+                id="Theme",
+                label="Domaine d'étude / Cible Ingestion",
+                values=themes if themes else ["Aucun thème disponible"],
+                initial_index=0
+            )
+        ]
+
+        # Envoi des paramètres de la barre latérale
+        settings = await cl.ChatSettings(sidebar_widgets).send()
+        
+        selected_theme = settings.get("Theme")
+        if selected_theme == "Aucun thème disponible":
+            selected_theme = None
+        cl.user_session.set("theme", selected_theme)
+
+    except Exception as e:
+        logger.error(f"Erreur d'initialisation du moteur : {e}")
+        await cl.Message(content=f"Erreur d'initialisation : {e}").send()
+        return
+
     # PBI-051/052: Si on est dans le cockpit admin
     if chat_profile == "Admin Cockpit":
         await show_admin_dashboard()
         return
 
-    # Intégration du handler Chainlit pour LlamaIndex (Nested Steps)
+    # Intégration du handler Chainlit pour LlamaIndex (Profil standard uniquement)
     callback_handler = LlamaIndexCallbackHandler()
     Settings.callback_manager.add_handler(callback_handler)
     
     try:
-        # Initialisation du moteur RAG
-        engine = RAGEngine()
-        cl.user_session.set("query_engine", engine)
-        
-        # Vérification de la santé de l'infrastructure (Audit-Fix)
+        # Vérification de la santé de l'infrastructure
         try:
             svc = engine._get_vector_service(engine.default_collection)
             if not svc.ping():
@@ -109,29 +138,6 @@ async def start():
             await cl.Message(content=f"Erreur critique d'infrastructure : {e}").send()
             return
 
-        # Détection dynamique des thèmes (PBI-035)
-        themes = engine.get_available_themes()
-
-        # Construction des éléments de la barre latérale
-        from chainlit.input_widget import Select, InputWidget
-        
-        sidebar_widgets: list[InputWidget] = [
-            Select(
-                id="Theme",
-                label="Domaine d'étude",
-                values=themes if themes else ["Aucun thème disponible"],
-                initial_index=0
-            )
-        ]
-
-        # Envoi des paramètres de la barre latérale
-        settings = await cl.ChatSettings(sidebar_widgets).send()
-        
-        selected_theme = settings.get("Theme")
-        if selected_theme == "Aucun thème disponible":
-            selected_theme = None
-        cl.user_session.set("theme", selected_theme)
-        
         # Message de bienvenue
         theme_display = selected_theme if selected_theme else "Aucun (recherche globale)"
         user_id = user.identifier if user else "Utilisateur"
@@ -143,7 +149,7 @@ async def start():
             
     except Exception as e:
         logger.error(f"Erreur d'initialisation : {e}")
-        await cl.Message(content=f"Erreur d'initialisation du moteur : {e}").send()
+        await cl.Message(content=f"Erreur d'initialisation : {e}").send()
 
 async def show_admin_dashboard():
     """
@@ -239,10 +245,18 @@ async def on_run_audit(action):
 
 @cl.action_callback("run_ingestion")
 async def on_run_ingestion(action):
-    await cl.Message(content="Lancement de l'ingestion thématique... (Tâche asynchrone)").send()
-    # Simulation
+    theme = cl.user_session.get("theme")
+    theme_display = theme if theme else "Intelligence Artificielle (Défaut)"
+    await cl.Message(content=f"Lancement de l'ingestion pour le thème : **{theme_display}**... (Tâche asynchrone)").send()
+    
     import subprocess
-    subprocess.Popen([sys.executable, "scripts/ingest_theme.py", "--theme", "Intelligence Artificielle"])
+    cmd = [sys.executable, "scripts/ingest_theme.py"]
+    if theme:
+        cmd.extend(["--theme", theme])
+    else:
+        cmd.extend(["--theme", "Intelligence Artificielle"])
+        
+    subprocess.Popen(cmd)
 
 @cl.on_settings_update
 
@@ -271,10 +285,22 @@ async def setup_agent(settings):
 
 @cl.on_message
 async def main(message: cl.Message):
+    """
+    Gestion des messages utilisateurs et des uploads PDF (PBI-054).
+    """
+    chat_profile = cl.user_session.get("chat_profile")
+    
+    # 1. Gestion des Uploads PDF pour l'admin (PBI-054 Scenario 2)
+    if chat_profile == "Admin Cockpit":
+        if message.elements:
+            for element in message.elements:
+                if isinstance(element, cl.File) and element.name.endswith(".pdf"):
+                    await handle_admin_upload(element)
+            return
+        else:
+            await cl.Message(content="Veuillez déposer un fichier PDF pour l'importer dans MinIO.").send()
+            return
 
-    """
-    Gestion des messages utilisateurs.
-    """
     engine = cl.user_session.get("query_engine")
     theme = cl.user_session.get("theme")
     
@@ -331,6 +357,51 @@ async def main(message: cl.Message):
         content=answer_text,
         elements=elements
     ).send()
+
+async def handle_admin_upload(file_element: cl.File):
+    """
+    Traite l'upload d'un PDF par l'admin et l'envoie vers MinIO (PBI-054).
+    """
+    import hashlib
+    from src.ingestion.theses_client import ThesesClient
+    
+    # Lecture du contenu
+    with open(file_element.path, "rb") as f:
+        content = f.read()
+    
+    # Calcul du hash pour le dédoublonnage (PBI-028)
+    file_hash = hashlib.sha256(content).hexdigest()
+    
+    # Initialisation client (pour bénéficier de la logique S3 centralisée)
+    client = ThesesClient()
+    
+    try:
+        msg = cl.Message(content=f"Traitement de `{file_element.name}`...")
+        await msg.send()
+        
+        if client.fs and client.bucket:
+            s3_path = f"{client.bucket}/pdfs/{file_hash}.pdf"
+            if not client.fs.exists(s3_path):
+                with client.fs.open(s3_path, "wb") as f:
+                    f.write(content)
+                msg.content = f"✅ Fichier `{file_element.name}` uploadé vers MinIO (S3: `{s3_path}`)."
+            else:
+                msg.content = f"ℹ️ Le fichier `{file_element.name}` existe déjà dans MinIO (Dédoublonnage SHA-256)."
+        else:
+            # Fallback local
+            local_path = os.path.join("data/pdfs", f"{file_hash}.pdf")
+            os.makedirs("data/pdfs", exist_ok=True)
+            if not os.path.exists(local_path):
+                with open(local_path, "wb") as f:
+                    f.write(content)
+                msg.content = f"✅ Fichier `{file_element.name}` sauvegardé localement (Fallback MinIO)."
+            else:
+                msg.content = f"ℹ️ Le fichier `{file_element.name}` existe déjà localement."
+        
+        await msg.update()
+    except Exception as e:
+        logger.error(f"Erreur lors de l'upload admin : {e}")
+        await cl.Message(content=f"❌ Erreur lors de l'upload : {e}").send()
 
 # PBI-033: Boucle de Feedback Humain
 @cl.on_feedback
