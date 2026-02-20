@@ -8,16 +8,16 @@ from datasets import Dataset
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import phoenix as px
-from ragas import evaluate
-from ragas.metrics import (
+import phoenix as px  # noqa: E402
+from ragas import evaluate  # noqa: E402
+from ragas.metrics import (  # noqa: E402
     faithfulness,
     answer_relevancy,
     context_precision,
 )
-from llama_index.core import Settings
-from src.config import setup_settings
-from src.generation.rag_engine import RAGEngine
+from llama_index.core import Settings  # noqa: E402
+from src.config import setup_settings  # noqa: E402
+from src.generation.rag_engine import RAGEngine  # noqa: E402
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
@@ -139,29 +139,31 @@ def run_audit(dataset_path=None, collection=None):
         )
         
         # 5. Rapport
-        report_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        report_filename = f"audit_{report_date}.md"
-        report_path = f"docs/AUDITS/{report_filename}"
-        ensure_dir("docs/AUDITS")
+        now = datetime.now()
+        report_date_str = now.strftime("%Y-%m-%d")
+        report_time_str = now.strftime("%H-%M-%S")
+        report_filename = f"audit_{report_time_str}.md"
+        report_dir = f"docs/AUDITS/{report_date_str}"
+        report_path = f"{report_dir}/{report_filename}"
+        ensure_dir(report_dir)
         
         # Latency analysis
-        client = px.Client(endpoint="http://localhost:6006")
-        spans_df = client.get_spans_dataframe()
         avg_latencies = {}
-        if spans_df is not None and not spans_df.empty:
-            spans_df['duration'] = (spans_df['end_time'] - spans_df['start_time']).dt.total_seconds()
-            avg_latencies = spans_df.groupby('span_kind')['duration'].mean().to_dict()
+        try:
+            client = px.Client(endpoint="http://localhost:6006")
+            spans_df = client.get_spans_dataframe()
+            if spans_df is not None and not spans_df.empty:
+                spans_df['duration'] = (spans_df['end_time'] - spans_df['start_time']).dt.total_seconds()
+                avg_latencies = spans_df.groupby('span_kind')['duration'].mean().to_dict()
+        except Exception as e:
+            logger.warning(f"Impossible de récupérer les latences depuis Phoenix : {e}")
 
         with open(report_path, "w") as f:
-            f.write(f"# Rapport d'Audit Holistique RAG - {report_date}\n\n")
+            f.write("# 📊 Rapport d'Audit Holistique RAG\n")
+            f.write(f"**Date** : {report_date_str} | **Heure** : {report_time_str}\n\n")
             
-            f.write("## 1. Analyse de Latence (Moyenne par étape)\n\n")
-            f.write("| Étape | Temps Moyen (s) |\n| :--- | :--- |\n")
-            for kind, duration in avg_latencies.items():
-                f.write(f"| {kind} | {duration:.3f}s |\n")
-            
-            f.write("\n## Résumé des Scores Ragas\n\n")
-            f.write("| Métrique | Score |\n| :--- | :--- |\n")
+            f.write("## 🛡️ Résumé de la Qualité (RAGAS)\n\n")
+            f.write("| Métrique | Score | État |\n| :--- | :--- | :--- |\n")
             
             try:
                 # Gestion robuste du résultat Ragas
@@ -173,25 +175,37 @@ def run_audit(dataset_path=None, collection=None):
                     scores = result # Fallback
                 
                 if isinstance(scores, dict):
+                    # On garde la ligne | Global | ... pour le cockpit admin
+                    f.write(f"| Global | {scores} | - |\n")
                     for metric, score in scores.items():
-                        f.write(f"| {metric} | {score:.4f} |\n")
+                        status = "✅" if score > 0.85 else "⚠️" if score > 0.7 else "🚨"
+                        f.write(f"| {metric} | **{score:.4f}** | {status} |\n")
                 else:
-                    f.write(f"| Global | {scores} |\n")
+                    f.write(f"| Score Global | {scores} | - |\n")
             except Exception as e:
                 logger.warning(f"Erreur lors de l'écriture des scores : {e}")
-                f.write(f"| Résultat | {result} |\n")
+                f.write(f"| Résultat | {result} | |\n")
             
-            f.write("\n## 3. Détails par Question\n\n")
+            f.write("\n## ⏱️ Performance & Latence\n\n")
+            f.write("| Étape | Temps Moyen (s) | Graphique |\n| :--- | :--- | :--- |\n")
+            for kind, duration in avg_latencies.items():
+                bar = "█" * int(duration * 10) if duration > 0.1 else "░"
+                f.write(f"| {kind} | {duration:.3f}s | `{bar}` |\n")
+            
+            f.write("\n## 📝 Détails par Question\n\n")
             try:
                 if hasattr(result, "to_pandas"):
                     df_res = result.to_pandas()
                     for i, row in df_res.iterrows():
                         q = row.get('question', f"Question {i}")
-                        f.write(f"### Q: {q}\n")
+                        f.write(f"### Q{i+1}: {q}\n")
+                        f.write(f"**Réponse** : {row.get('answer', 'N/A')[:200]}...\n\n")
                         for col in df_res.columns:
                             if col not in ['question', 'answer', 'contexts', 'ground_truth']:
-                                f.write(f"- **{col}**: {row[col]}\n")
-                        f.write("\n")
+                                val = row[col]
+                                star = "⭐" if isinstance(val, (int, float)) and val > 0.8 else ""
+                                f.write(f"- **{col}**: {val} {star}\n")
+                        f.write("\n---\n")
                 else:
                     f.write("Détails non disponibles sous forme de tableau.\n")
             except Exception as e:
@@ -199,17 +213,18 @@ def run_audit(dataset_path=None, collection=None):
 
         logger.info(f"Rapport local généré : {report_path}")
         
-        # 6. Export vers MinIO (PBI-043)
+        # 6. Export vers MinIO (PBI-043 + PBI-050 hierarchy)
         try:
             from src.ingestion.theses_client import ThesesClient
             t_client = ThesesClient()
             if t_client.fs:
                 bucket_reports = "reports"
-                if not t_client.fs.exists(bucket_reports):
-                    t_client.fs.makedirs(bucket_reports)
-                    logger.info(f"Bucket '{bucket_reports}' créé.")
+                # Hiérarchie /reports/YYYY-MM-DD/
+                remote_dir = f"{bucket_reports}/{report_date_str}"
+                if not t_client.fs.exists(remote_dir):
+                    t_client.fs.makedirs(remote_dir)
                 
-                remote_path = f"{bucket_reports}/{report_filename}"
+                remote_path = f"{remote_dir}/{report_filename}"
                 with t_client.fs.open(remote_path, "w") as f_remote:
                     with open(report_path, "r") as f_local:
                         f_remote.write(f_local.read())

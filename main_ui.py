@@ -81,53 +81,10 @@ async def start():
             selected_theme = None
         cl.user_session.set("theme", selected_theme)
         
-        # Envoi des éléments d'affichage (Text) via un message unique
-        ui_elements = []
-        
-        # Dashboard qualité (PBI-044)
-        quality_elements = await get_quality_dashboard_elements()
-        if quality_elements:
-            ui_elements.extend(quality_elements)
-        else:
-            ui_elements.append(cl.Text(
-                name="📊 Dashboard Qualité",
-                content="Aucun rapport d'audit trouvé dans `docs/AUDITS/`.",
-                display="side"
-            ))
-            
-        # Lien d'observabilité
-        ui_elements.append(cl.Text(
-            name="Observabilité",
-            content="Accédez aux traces détaillées dans [Arize Phoenix](http://localhost:6006)",
-            display="side"
-        ))
-        
-        # Envoi groupé des éléments side (Fix for_id crash)
-        await cl.Message(
-            content="Système initialisé.",
-            elements=ui_elements,
-            author="Système"
-        ).send()
-        
-        # Stats du thème
-        stats_info = ""
-        if selected_theme:
-            stats = engine.get_theme_stats(selected_theme)
-            points_count = stats.get('points_count', 0)
-            status = stats.get('status', 'unknown')
-            
-            if points_count == 0:
-                if status == 'error':
-                    stats_info = f"\n⚠️ **Attention**: La collection '{selected_theme}' est inaccessible ou n'existe pas."
-                else:
-                    stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés. (Collection vide)"
-            else:
-                stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés."
-
-        # Message de bienvenue (indépendant de la sidebar)
+        # Message de bienvenue
         theme_display = selected_theme if selected_theme else "Aucun (recherche globale)"
         status_msg = cl.Message(
-            content=f"Moteur DeepInsight prêt. Thème actif : **{theme_display}**.{stats_info}\nPosez vos questions sur les thèses."
+            content=f"Bienvenue sur DeepInsight. Thème actif : **{theme_display}**.\nPosez vos questions sur les thèses."
         )
         await status_msg.send()
         cl.user_session.set("status_msg", status_msg)
@@ -147,26 +104,10 @@ async def setup_agent(settings):
         new_theme = None
     cl.user_session.set("theme", new_theme)
     
-    engine = cl.user_session.get("query_engine")
-    stats_info = ""
-    if engine and new_theme:
-        stats = engine.get_theme_stats(new_theme)
-        points_count = stats.get('points_count', 0)
-        status = stats.get('status', 'unknown')
-        
-        if points_count == 0:
-            if status == 'error':
-                stats_info = f"\n⚠️ **Attention**: La collection '{new_theme}' est inaccessible ou n'existe pas."
-            else:
-                stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés. (Collection vide)"
-        else:
-            stats_info = f"\n📊 **Statistiques**: {points_count} extraits indexés."
-
-    # Gestion propre de la notification de changement (PBI-Review)
-    # On utilise un message éphémère ou on met à jour le dernier message de statut
+    # Gestion propre de la notification de changement
     status_msg = cl.user_session.get("status_msg")
     theme_display = new_theme if new_theme else "Aucun (recherche globale)"
-    content = f"Domaine de recherche mis à jour : **{theme_display}**.{stats_info}"
+    content = f"Domaine de recherche mis à jour : **{theme_display}**."
     
     if status_msg:
         status_msg.content = content
@@ -176,75 +117,9 @@ async def setup_agent(settings):
         cl.user_session.set("status_msg", new_status_msg)
         await new_status_msg.send()
 
-async def get_quality_dashboard_elements():
-    """
-    Récupère le dernier rapport d'audit et retourne des éléments cl.Text pour l'affichage.
-    (PBI-044 : Dashboard de Confiance)
-    """
-    audit_dir = "docs/AUDITS"
-    if not os.path.exists(audit_dir):
-        return []
-        
-    audit_files = sorted([f for f in os.listdir(audit_dir) if f.startswith("audit_") and f.endswith(".md")], reverse=True)
-    if not audit_files:
-        return []
-        
-    latest_audit = audit_files[0]
-    elements = []
-    
-    try:
-        with open(os.path.join(audit_dir, latest_audit), "r", encoding="utf-8") as f:
-            content = f.read()
-            
-        # 1. Extraction du score de Faithfulness pour le badge de confiance
-        import re
-        import ast
-        
-        # Regex améliorée pour capturer le dictionnaire Global (PBI-044 Fix)
-        global_match = re.search(r"\| Global \| (\{.*?\}) \|", content)
-        if global_match:
-            try:
-                # Évaluation sécurisée du dictionnaire Python présent dans le MD
-                scores_dict = ast.literal_eval(global_match.group(1))
-                faith_score = scores_dict.get('faithfulness', 0.0)
-                
-                percentage = faith_score * 100
-                
-                if faith_score == 0.0:
-                    elements.append(cl.Text(
-                        name="🛡️ Indice de Confiance",
-                        content="Score de fidélité : **Audit sur données complexes**\nStatut : 🚨 **Fidélité non mesurable**\n\n*L'échantillon testé n'a pas permis de valider la fidélité (score 0.0).*",
-                        display="side"
-                    ))
-                else:
-                    status = "Excellent" if faith_score > 0.85 else "Correct" if faith_score > 0.7 else "À surveiller"
-                    emoji = "✅" if faith_score > 0.85 else "⚠️" if faith_score > 0.7 else "🚨"
-                    
-                    elements.append(cl.Text(
-                        name="🛡️ Indice de Confiance",
-                        content=f"Score de fidélité : **{percentage:.1f}%**\nStatut : {emoji} **{status}**\n\n*Basé sur le dernier audit automatisé.*",
-                        display="side"
-                    ))
-            except Exception as parse_err:
-                logger.warning(f"Erreur lors du parsing du dictionnaire de scores : {parse_err}")
-
-        # 2. Extraction du résumé complet
-        summary_match = re.search(r"## Résumé des Scores Ragas\s+(.*?)(?=\n##|$)", content, re.DOTALL)
-        if summary_match:
-            summary = summary_match.group(1).strip()
-            elements.append(cl.Text(
-                name="📊 Détails Qualité Ragas",
-                content=f"Rapport : `{latest_audit}`\n\n{summary}",
-                display="side"
-            ))
-            
-    except Exception as e:
-        logger.warning(f"Erreur lors de la lecture de l'audit : {e}")
-        
-    return elements
-
 @cl.on_message
 async def main(message: cl.Message):
+
     """
     Gestion des messages utilisateurs.
     """
@@ -299,19 +174,13 @@ async def main(message: cl.Message):
     if source_refs:
         answer_text += "\n\n**Sources :** " + ", ".join([f"[{ref}]" for ref in source_refs])
     
-    # 3. Dashboard qualité persistant (PBI-044 Fix)
-    # On rajoute les éléments de confiance à chaque message pour qu'ils restent visibles
-    quality_elements = await get_quality_dashboard_elements()
-    if quality_elements:
-        elements.extend(quality_elements)
-
-    # Envoi de la réponse avec les sources et le dashboard
+    # Envoi de la réponse avec les sources
     await cl.Message(
         content=answer_text,
         elements=elements
     ).send()
 
-# PBI-033: Boucle de Feedback Humain (Intégration Phoenix)
+# PBI-033: Boucle de Feedback Humain
 @cl.on_feedback
 async def process_feedback(feedback):
     """
