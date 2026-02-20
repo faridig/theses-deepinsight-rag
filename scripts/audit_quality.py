@@ -8,16 +8,16 @@ from datasets import Dataset
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import phoenix as px
-from ragas import evaluate
-from ragas.metrics import (
+import phoenix as px  # noqa: E402
+from ragas import evaluate  # noqa: E402
+from ragas.metrics import (  # noqa: E402
     faithfulness,
     answer_relevancy,
     context_precision,
 )
-from llama_index.core import Settings
-from src.config import setup_settings
-from src.generation.rag_engine import RAGEngine
+from llama_index.core import Settings  # noqa: E402
+from src.config import setup_settings  # noqa: E402
+from src.generation.rag_engine import RAGEngine  # noqa: E402
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
@@ -159,7 +159,7 @@ def run_audit(dataset_path=None, collection=None):
             logger.warning(f"Impossible de récupérer les latences depuis Phoenix : {e}")
 
         with open(report_path, "w") as f:
-            f.write(f"# 📊 Rapport d'Audit Holistique RAG\n")
+            f.write("# 📊 Rapport d'Audit Holistique RAG\n")
             f.write(f"**Date** : {report_date_str} | **Heure** : {report_time_str}\n\n")
             
             f.write("## 🛡️ Résumé de la Qualité (RAGAS)\n\n")

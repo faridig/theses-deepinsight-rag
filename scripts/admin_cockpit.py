@@ -3,41 +3,53 @@ import sys
 import logging
 import re
 import ast
-from typing import Optional
 
-# Configuration des logs
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+# Configuration des logs - Silence Technique (PBI-050)
+logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 logger = logging.getLogger("AdminCockpit")
+logger.setLevel(logging.INFO)
+
+# Silence technique pour les dépendances bruyantes
+logging.getLogger("llama_index").setLevel(logging.ERROR)
+logging.getLogger("phoenix").setLevel(logging.ERROR)
+logging.getLogger("openai").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("numba").setLevel(logging.ERROR)
+logging.getLogger("src").setLevel(logging.CRITICAL) # Silence presque tout le code source interne
 
 # Ajout du chemin racine
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.generation.rag_engine import RAGEngine
+from src.generation.rag_engine import RAGEngine  # noqa: E402
 
 def get_latest_audit_metrics() -> dict:
-    """Récupère les dernières metrics d'audit de qualité."""
+    """Récupère les dernières metrics d'audit de qualité (hiérarchie YYYY-MM-DD uniquement)."""
     audit_root = "docs/AUDITS"
     if not os.path.exists(audit_root):
         return {}
         
-    # Recherche récursive du fichier audit_*.md le plus récent
     all_audits = []
-    for root, dirs, files in os.walk(audit_root):
-        for f in files:
-            if f.startswith("audit_") and f.endswith(".md"):
-                all_audits.append(os.path.join(root, f))
+    # On cherche uniquement dans les sous-répertoires de type YYYY-MM-DD (Decision PBI-050)
+    date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    
+    for entry in os.scandir(audit_root):
+        if entry.is_dir() and date_pattern.match(entry.name):
+            for f_entry in os.scandir(entry.path):
+                if f_entry.is_file() and f_entry.name.startswith("audit_") and f_entry.name.endswith(".md"):
+                    all_audits.append(f_entry.path)
     
     if not all_audits:
         return {}
         
-    # Sort by filename (which contains time) and then by directory (date)
+    # Le tri alphabétique reverse garantit que la date la plus récente vient en premier
     latest_audit_path = sorted(all_audits, reverse=True)[0]
     
     try:
         with open(latest_audit_path, "r", encoding="utf-8") as f:
             content = f.read()
             
-        global_match = re.search(r"\| Global \| (\{.*?\}) \|", content)
+        # Recherche flexible supportant "| Global |" et "| Score Global |"
+        global_match = re.search(r"\| (?:Score )?Global \| (\{.*?\}) \|", content)
         if global_match:
             scores_dict = ast.literal_eval(global_match.group(1))
             return {
@@ -45,6 +57,8 @@ def get_latest_audit_metrics() -> dict:
                 "path": latest_audit_path,
                 "scores": scores_dict
             }
+        else:
+            logger.debug(f"Format de scores non trouvé dans {latest_audit_path}")
     except Exception as e:
         logger.warning(f"Erreur lors de la lecture de l'audit {latest_audit_path}: {e}")
     
