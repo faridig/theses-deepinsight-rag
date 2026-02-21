@@ -214,8 +214,10 @@ async def process_feedback(feedback):
     feedbacks = []
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
-            try: feedbacks = json.load(f)
-            except Exception: pass
+            try:
+                feedbacks = json.load(f)
+            except Exception:
+                pass
     feedbacks.append(feedback_data)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(feedbacks, f, indent=4, ensure_ascii=False)

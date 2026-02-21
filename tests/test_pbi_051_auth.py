@@ -1,6 +1,5 @@
 import pytest
-import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from main_ui import auth_callback, chat_profile
 
 @pytest.mark.asyncio

@@ -5,8 +5,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import subprocess
 import time
-import re
-import ast
 from datetime import datetime
 
 # Add project root to path
