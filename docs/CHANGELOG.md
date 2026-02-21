@@ -1,5 +1,53 @@
 # Changelog - Theses-DeepInsight RAG
 
+## [1.10.0] - 2026-02-20
+### Ajouté
+- **Sprint 19 : Cockpit Governance UI (PBI-051, 052, 053, 054, 055)**
+    - Migration complète du cockpit d'administration vers une interface graphique sécurisée dans Chainlit.
+    - **PBI-051** : Authentification Admin sécurisée et profils de chat restreints.
+    - **PBI-052** : Dashboard "Pouls" pour le monitoring temps réel (Qdrant, MinIO, Phoenix).
+    - **PBI-053** : Visualisation historique de la qualité RAG (Plotly Charts).
+    - **PBI-054** : Orchestration interactive des tâches d'ingestion et d'audit via l'UI.
+    - **PBI-054 Scenario 2** : Gestion native des uploads PDF avec dédoublonnage SHA-256 vers MinIO.
+    - **PBI-055** : Moniteur de coûts OpenAI et statistiques de collections Qdrant.
+    - **PBI-055 Flexibilité** : Sélection dynamique du thème partagée entre les modes User et Admin.
+
+## 💡 LEÇONS APPRISES
+- **Sécurité Chainlit** : L'activation de l'authentification nécessite impérativement un `CHAINLIT_AUTH_SECRET`. Son absence est un point de blocage critique pour le déploiement.
+- **Dédoublonnage proactif** : L'intégration du hash SHA-256 lors de l'upload admin permet d'éviter la saturation inutile du stockage S3 (MinIO) dès la source.
+- **Orchestration Asynchrone** : L'utilisation de `subprocess.Popen` pour les tâches lourdes (Audit/Ingestion) est vitale pour ne pas bloquer l'Event Loop de Chainlit et préserver la réactivité de l'UI.
+- **Health Pulse & Résilience** : L'implémentation d'un "Health Pulse" dynamique permet de détecter les pannes d'infrastructure (Qdrant/MinIO) AVANT que l'utilisateur ne rencontre une erreur, améliorant drastiquement la perception de fiabilité du système.
+- **Isolation Thématique** : La structuration par silos (collections Qdrant dédiées) facilite la maintenance et la suppression propre d'un domaine d'étude sans affecter le reste de l'index.
+
+## [1.9.0] - 2026-02-20
+### Ajouté
+- **Sprint 18 : Gouvernance Admin & Silence UX (PBI-048, 049, 050)**
+    - Isolation des metrics techniques dans un Cockpit Admin dédié (`scripts/admin_cockpit.py`).
+    - Silençage complet de l'interface utilisateur (suppression des dashboards de confiance perturbateurs).
+    - Refonte de la hiérarchie des rapports d'audit (`docs/AUDITS/YYYY-MM-DD/`).
+    - Durcissement du "Silence Technique" (filtrage des logs `llama_index`, `phoenix`, `openai`).
+    - Correction de la persistance de l'UX lors des changements de thèmes.
+
+## 💡 LEÇONS APPRISES
+- **Silençage des Logs** : L'utilisation de `logging.getLogger("...").setLevel(logging.ERROR)` est indispensable pour maintenir un cockpit d'administration lisible face à des librairies verbeuses (LlamaIndex, Phoenix).
+- **Hiérarchie de Stockage** : La structuration temporelle des audits facilite le versioning et la récupération automatique des données par les outils de dashboarding sans collision de fichiers.
+- **Expérience Utilisateur (UX)** : L'utilisateur final n'a pas besoin de preuves de fidélité mathématiques à chaque message ; la confiance doit être gérée par le monitoring interne plutôt que par l'exposition brute de metrics complexes.
+
+## [1.8.0] - 2026-02-18
+### Ajouté
+- **Sprint 17 : Excellence Académique & Robustesse (PBI-042, 043, 045, 046, 047)**
+    - Durcissement des prompts système pour garantir une fidélité (>0.85) aux sources.
+    - Automation des audits de qualité avec export automatique des rapports vers le stockage S3 (MinIO).
+    - Génération d'un dataset de vérité (Ground Truth) automatisée à partir des documents réels.
+    - Refactoring complet de la structure du projet (nettoyage de la racine, purge du stockage de test).
+    - Stabilisation de l'observabilité (OTLP Phoenix) pour les environnements de production.
+    - Prototype du Dashboard de Confiance UI (ayant conduit à la décision de découplage Admin/User).
+
+## 💡 LEÇONS APPRISES
+- **Fidélité vs Créativité** : Un durcissement excessif du prompt peut limiter la fluidité de la réponse. Le compromis trouvé privilégie la citation exacte au détriment de la synthèse trop libre.
+- **Dette de Structure** : Les sprints rapides accumulent des fichiers parasites à la racine. Une phase de "Housekeeping" périodique est indispensable pour maintenir la maintenabilité du projet.
+- **Séparation des Préoccupations (Admin/UI)** : Les metrics techniques (Faithfulness, Latence) perturbent l'utilisateur final. Elles doivent être isolées dans un cockpit d'administration dédié.
+
 ## [1.7.0] - 2026-02-18
 ### Ajouté
 - **Sprint 16 : Performance d'Ingestion Massive & Audit Holistique (PBI-024, 025, 026, 027, 028)**
