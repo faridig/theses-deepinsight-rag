@@ -1,0 +1,29 @@
+2026-02-18 21:49:23 - INFO - phoenix.config - 📋 Ensuring phoenix working directory: /home/farid/.phoenix
+2026-02-18 21:49:23 - INFO - phoenix.inferences.inferences - Dataset: phoenix_inferences_aeadfea1-af4a-4c40-9852-8567f710169f initialized
+2026-02-18 21:49:23 - INFO - alembic.runtime.plugins - setup plugin alembic.autogenerate.schemas
+2026-02-18 21:49:23 - INFO - alembic.runtime.plugins - setup plugin alembic.autogenerate.tables
+2026-02-18 21:49:23 - INFO - alembic.runtime.plugins - setup plugin alembic.autogenerate.types
+2026-02-18 21:49:23 - INFO - alembic.runtime.plugins - setup plugin alembic.autogenerate.constraints
+2026-02-18 21:49:23 - INFO - alembic.runtime.plugins - setup plugin alembic.autogenerate.defaults
+2026-02-18 21:49:23 - INFO - alembic.runtime.plugins - setup plugin alembic.autogenerate.comments
+2026-02-18 21:49:26 - INFO - src.config - Mode test détecté - instrumentation simplifiée sans export OTLP
+2026-02-18 21:49:26 - INFO - src.config - Instrumentation Arize Phoenix activée via OpenInference
+2026-02-18 21:49:26 - INFO - root - Instrumentation Phoenix configurée via src/config.py
+2026-02-18 21:49:26 - INFO - chainlit - Your app is available at http://0.0.0.0:8080
+[0218/214927.503883:WARNING:chrome/app/chrome_main_linux.cc:83] Read channel stable from /app/extra/CHROME_VERSION_EXTRA
+[0218/214927.650180:WARNING:chrome/app/chrome_main_linux.cc:83] Read channel stable from /app/extra/CHROME_VERSION_EXTRA
+Ouverture dans une session de navigateur existante.
+2026-02-18 21:49:28 - WARNING - chainlit - Translated markdown file for fr-FR not found. Defaulting to chainlit.md.
+2026-02-18 21:49:28 - INFO - chainlit - Missing custom logo. Falling back to default logo.
+2026-02-18 21:49:30 - INFO - src.config - LlamaIndex Settings initialisés (LLM: OpenAI, Embed: OpenAIEmbedding)
+2026-02-18 21:49:30 - INFO - src.config - LlamaIndex Settings initialisés (LLM: OpenAI, Embed: OpenAIEmbedding)
+2026-02-18 21:49:30 - INFO - src.indexing.vector_service - Utilisation du serveur Qdrant à http://localhost:6333
+2026-02-18 22:01:35 - WARNING - chainlit - Translated markdown file for fr-FR not found. Defaulting to chainlit.md.
+2026-02-18 22:01:35 - INFO - src.config - LlamaIndex Settings initialisés (LLM: OpenAI, Embed: OpenAIEmbedding)
+2026-02-18 22:01:35 - INFO - src.config - LlamaIndex Settings initialisés (LLM: OpenAI, Embed: OpenAIEmbedding)
+2026-02-18 22:01:35 - INFO - src.indexing.vector_service - Utilisation du serveur Qdrant à http://localhost:6333
+2026-02-18 22:01:49 - INFO - src.generation.rag_engine - Initialisation du QueryEngine pour la collection : theses-intelligence-artificielle
+2026-02-18 22:01:54 - INFO - src.generation.rag_engine - Temps total aquery (theses-intelligence-artificielle): 5.18s
+2026-02-18 22:02:06 - INFO - src.generation.rag_engine - Temps total aquery (theses-intelligence-artificielle): 3.60s
+2026-02-18 22:02:15 - INFO - src.generation.rag_engine - Temps total aquery (theses-intelligence-artificielle): 2.79s
+2026-02-18 22:02:29 - INFO - src.generation.rag_engine - Temps total aquery (theses-intelligence-artificielle): 5.40s

@@ -42,6 +42,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./docs:/app/docs
+      - ./storage:/app/storage
 
   phoenix:
     image: arizephoenix/phoenix:latest
@@ -50,7 +51,10 @@ services:
     environment:
       - PHOENIX_PORT=6006
       - PHOENIX_HOST=0.0.0.0
+    volumes:
+      - phoenix_data:/root/.arize-phoenix
 
 volumes:
   qdrant_data:
   minio_data:
+  phoenix_data:

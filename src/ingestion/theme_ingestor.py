@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Optional
 from llama_index.core import SimpleDirectoryReader
 from src.ingestion.theses_client import ThesesClient
 from src.ingestion.async_ingestor import AsyncIngestor
@@ -109,10 +110,10 @@ async def download_theme(theme_name: str, limit: int = 10, storage_path: str = "
         logger.warning(f"Aucun document valide à ingester pour le thème {theme_name}.")
         return []
 
-async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
+async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant", target_theme: Optional[str] = None):
     """
     Scanne le bucket S3 et orchestre l'ingestion par silo thématique (PBI-027).
-    Garantit l'étanchéité thématique entre les collections Qdrant.
+    Si target_theme est fourni, ne traite que ce thème (PBI-062).
     """
     client = ThesesClient()
     if not client.fs:
@@ -121,20 +122,23 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant"):
 
     bucket = client.bucket
     # 1. Découverte des Thèmes (PBI-027)
-    try:
-        # Liste les dossiers (thèmes) dans le bucket
-        items = client.fs.ls(bucket, detail=False)
-        # On filtre pour ne garder que les répertoires (slugs de thèmes)
-        themes = [os.path.basename(item) for item in items if client.fs.isdir(item)]
-    except Exception as e:
-        logger.error(f"Erreur lors du scan du bucket {bucket} : {e}")
-        return
+    if target_theme:
+        themes = [normalize_theme(target_theme)]
+    else:
+        try:
+            # Liste les dossiers (thèmes) dans le bucket
+            items = client.fs.ls(bucket, detail=False)
+            # On filtre pour ne garder que les répertoires (slugs de thèmes)
+            themes = [os.path.basename(item) for item in items if client.fs.isdir(item)]
+        except Exception as e:
+            logger.error(f"Erreur lors du scan du bucket {bucket} : {e}")
+            return
 
     if not themes:
         logger.warning(f"Aucun thème découvert dans le bucket {bucket}.")
         return
 
-    logger.info(f"Thèmes découverts dans S3 : {themes}")
+    logger.info(f"Thèmes à traiter dans S3 : {themes}")
 
     # 2. Orchestration de l'Ingestion par Silo (PBI-027)
     for theme_slug in themes:

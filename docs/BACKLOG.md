@@ -54,12 +54,25 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-039** | **Ingestion Massive & Indexation** | Ingestion de 3 thèmes complets pour test de charge. | DONE | HAUTE |
 | **PBI-040** | **Simulation de Trafic & Stress Test** | Simulation de 50+ requêtes pour génération de traces. | DONE | HAUTE |
 | **PBI-041** | **Rapport Performance Holistique** | Analyse Ragas + Latence sur le volume de données. | DONE | HAUTE |
-| **PBI-042** | **[QUALITÉ] Prompt Engineering** | Durcissement des contraintes pour atteindre >0.85 de Faithfulness. | À FAIRE | CRITIQUE |
-| **PBI-043** | **[PROD] Automation de l'Audit** | Déclenchement périodique et export des rapports vers MinIO (S3). | À FAIRE | HAUTE |
-| **PBI-044** | **[UX/ADMIN] Dashboard de Confiance** | Affichage du score de fidélité moyen dans l'interface Chainlit. | À FAIRE | MOYENNE |
-| **PBI-045** | **[TECH] Migration Phoenix Prod** | Configuration OTLP robuste pour éviter les erreurs de connexion. | À FAIRE | MOYENNE |
-| **PBI-046** | **[TECH] Housekeeping & Structure** | Nettoyage des fichiers racine et réorganisation des dossiers de stockage. | À FAIRE | BASSE |
-| **PBI-047** | **[QUALITÉ] Dataset de Vérité (LLM-Generated)** | Génération d'un référentiel Q/A par un LLM à partir des thèses réelles. | À FAIRE | HAUTE |
+| **PBI-042** | **[QUALITÉ] Prompt Engineering** | Durcissement des contraintes pour atteindre >0.85 de Faithfulness. | DONE | CRITIQUE |
+| **PBI-043** | **[PROD] Automation de l'Audit** | Déclenchement périodique et export des rapports vers MinIO (S3). | DONE | HAUTE |
+| **PBI-044** | **[UX/ADMIN] Dashboard de Confiance** | Affichage du score de fidélité moyen dans l'interface Chainlit. | DONE | MOYENNE |
+| **PBI-045** | **[TECH] Migration Phoenix Prod** | Configuration OTLP robuste pour éviter les erreurs de connexion. | DONE | MOYENNE |
+| **PBI-046** | **[TECH] Housekeeping & Structure** | Nettoyage des fichiers racine et réorganisation des dossiers de stockage. | DONE | BASSE |
+| **PBI-047** | **[QUALITÉ] Dataset de Vérité (LLM-Generated)** | Génération d'un référentiel Q/A par un LLM à partir des thèses réelles. | DONE | HAUTE |
+| **PBI-048** | **[UX] Nettoyage UI (Silence UX)** | Suppression des scores et metrics techniques de l'interface utilisateur. | DONE | HAUTE |
+| **PBI-049** | **[ADMIN] Dashboard de Santé Dédié** | Création d'une interface admin séparée pour le suivi des metrics. | DONE | HAUTE |
+| **PBI-050** | **[REPORTING] Rapports Structurés** | Formatage des rapports (PDF/MD) pour stockage et diffusion auto. | DONE | MOYENNE |
+| **PBI-051** | **[ADMIN] Socle Cockpit Chainlit** | Intégration dans Chainlit, Auth sécurisée et isolation des performances. | DONE | CRITIQUE |
+| **PBI-052** | **[ADMIN] Dashboard "Pouls" & Observabilité** | Monitoring santé (Qdrant/MinIO/Phoenix) and lien direct Phoenix. | DONE | HAUTE |
+| **PBI-053** | **[ADMIN] Dashboard Qualité & Ragas** | Visualisation scores Fidélité/Pertinence et historique graphique. | DONE | HAUTE |
+| **PBI-054** | **[ADMIN] Pilotage & Ingestion UI** | Interface de déclenchement d'ingestion/audit avec barre de progression. | DONE | HAUTE |
+| **PBI-055** | **[ADMIN] Moniteur de Coûts & Thèmes** | Suivi des tokens OpenAI et statistiques détaillées des collections Qdrant. | DONE | MOYENNE |
+| **PBI-056** | **[ADMIN] Gestionnaire de Thèmes Hybride** | Création/Sélection dynamique de thèmes et indexation via upload UI. | IN_PROGRESS | HAUTE |
+| **PBI-057** | **[ADMIN] Ingestion thématique à la demande** | Scraping automatisé de theses.fr (Top 10) via mot-clé saisi dans l'UI. | PENDING | HAUTE |
+| **PBI-058** | **[ADMIN] Auto-Audit Qualité Post-Ingestion** | Validation immédiate de la fidélité (Faithfulness) après ajout de données. | PENDING | MOYENNE |
+| **PBI-061** | **[TECH] Infrastructure Résiliente** | Persistance du cache d'ingestion et de l'historique Arize Phoenix. | PENDING | HAUTE |
+| **PBI-062** | **[ADMIN] Gouvernance & Souveraineté** | Cycle de vie (Delete/Purge) et Re-Sync des thèmes depuis MinIO. | PENDING | HAUTE |
 
 ---
 
@@ -68,8 +81,12 @@ Tout ticket entrant en Sprint doit comporter :
 - User Story claire.
 - Critères d'Acceptation (Gherkin).
 - Estimation (XS à L).
-- Justification technologique (context7).
+- **Justification technologique (context7)** :
+  - **UI** : Utilisation de `cl.ChatSettings` avec `Select` et `TextInput` pour la gestion hybride des thèmes.
+  - **Data** : `SimpleDirectoryReader` couplé à `s3fs` pour l'interaction native avec MinIO (S3).
+  - **Pipeline** : `IngestionPipeline` de LlamaIndex pour l'extraction de métadonnées (`TitleExtractor`) lors du sourcing.
 - **Nouveauté Sprint 14** : Utilisation préférentielle des outils natifs LlamaIndex pour la génération de données.
+- **Nouveauté Sprint 19** : Intégration asynchrone pour l'interface Admin afin de ne pas bloquer le thread principal Chainlit.
 
 ---
-*Dernière mise à jour : 16/02/2026*
+*Dernière mise à jour : 21/02/2026*
