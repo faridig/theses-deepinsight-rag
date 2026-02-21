@@ -17,10 +17,8 @@ from chainlit.llama_index.callbacks import LlamaIndexCallbackHandler
 from src.generation.rag_engine import RAGEngine
 from src.config import setup_settings
 
-# Initialisation Globale de l'instrumentation Phoenix (Bug Fix)
-# Note: L'instrumentation est maintenant configurée dans src/config.py
-# via setup_phoenix_instrumentation() qui est appelée par setup_settings()
-logging.info("Instrumentation Phoenix configurée via src/config.py")
+# Initialisation des paramètres et des variables d'environnement (Fix Bloquant Review)
+setup_settings()
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
@@ -416,12 +414,16 @@ async def handle_admin_upload(file_element: cl.File, theme: Optional[str] = None
     from src.config import normalize_theme
     from llama_index.core import SimpleDirectoryReader
     
+    if not file_element.path:
+        await cl.Message(content="❌ Erreur : Chemin du fichier manquant.").send()
+        return
+
     # 1. Préparation
     slug_theme = normalize_theme(theme) if theme else "default"
     collection_name = f"theses-{slug_theme}"
     
     # Lecture du contenu local
-    with open(file_element.path, "rb") as f:
+    with open(str(file_element.path), "rb") as f:
         content = f.read()
     
     file_hash = hashlib.sha256(content).hexdigest()
@@ -467,6 +469,9 @@ async def handle_admin_upload(file_element: cl.File, theme: Optional[str] = None
 
         # 3. Ingestion immédiate (PBI-056)
         vector_service = VectorService(collection_name=collection_name)
+        if not vector_service.available:
+             raise RuntimeError("Service Qdrant indisponible.")
+
         await vector_service.create_collection_if_not_exists(collection_name)
         
         cache_path = f"storage/cache/{slug_theme}"
@@ -497,6 +502,7 @@ async def handle_admin_upload(file_element: cl.File, theme: Optional[str] = None
         logger.error(f"Erreur lors de l'ingestion admin : {e}")
         await cl.Message(content=f"❌ **Erreur d'ingestion** : {e}").send()
 
+
 async def run_mini_audit(vector_service, theme_slug):
     """Génère un mini-audit après ingestion (PBI-058)."""
     from llama_index.core.llama_dataset.generator import RagDatasetGenerator
@@ -523,11 +529,20 @@ async def run_mini_audit(vector_service, theme_slug):
                 llm=Settings.llm,
                 num_questions_per_chunk=1
             )
-            return generator.generate_questions_from_nodes(num=3)
+            # On retire le paramètre 'num' qui cause une erreur LSP
+            return generator.generate_questions_from_nodes()
             
-        questions = await asyncio.to_thread(generate)
+        dataset = await asyncio.to_thread(generate)
+        # On extrait les questions du dataset (PBI-058)
+        if hasattr(dataset, "examples"):
+            questions = [e.query for e in dataset.examples]
+        else:
+            questions = dataset # Fallback si c'est déjà une liste
+            
+        # On limite à 3 questions
+        questions = questions[:3]
         
-        msg.content = f"🛡️ **Auto-Audit** : {len(questions)} questions générées.\n- **Statut** : Indexation vérifiée ✅\n- **Fidélité estimée** : 0.85+ (basé sur la cohérence des nœuds)"
+        msg.content = f"🛡️ **Auto-Audit** : {len(questions)} questions générées.\n- **Statut** : Indexation thématique vérifiée ✅\n- **Questions Flash** : {', '.join(questions[:2])}..."
         await msg.update()
         
     except Exception as e:

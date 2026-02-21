@@ -31,7 +31,7 @@ class AsyncIngestor:
                     logger.info(f"Loaded existing IngestionCache from {cache_path}")
                 else:
                     self.kv_store = SimpleKVStore()
-                cache = IngestionCache(kvstore=self.kv_store)
+                cache = IngestionCache(cache=self.kv_store)
                 self.cache_path = cache_path
                 logger.info(f"IngestionCache initialized (path: {cache_path})")
             except Exception as e:

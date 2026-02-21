@@ -16,6 +16,8 @@
 - **Sécurité Chainlit** : L'activation de l'authentification nécessite impérativement un `CHAINLIT_AUTH_SECRET`. Son absence est un point de blocage critique pour le déploiement.
 - **Dédoublonnage proactif** : L'intégration du hash SHA-256 lors de l'upload admin permet d'éviter la saturation inutile du stockage S3 (MinIO) dès la source.
 - **Orchestration Asynchrone** : L'utilisation de `subprocess.Popen` pour les tâches lourdes (Audit/Ingestion) est vitale pour ne pas bloquer l'Event Loop de Chainlit et préserver la réactivité de l'UI.
+- **Health Pulse & Résilience** : L'implémentation d'un "Health Pulse" dynamique permet de détecter les pannes d'infrastructure (Qdrant/MinIO) AVANT que l'utilisateur ne rencontre une erreur, améliorant drastiquement la perception de fiabilité du système.
+- **Isolation Thématique** : La structuration par silos (collections Qdrant dédiées) facilite la maintenance et la suppression propre d'un domaine d'étude sans affecter le reste de l'index.
 
 ## [1.9.0] - 2026-02-20
 ### Ajouté

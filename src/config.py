@@ -102,11 +102,22 @@ def setup_settings():
     """
     Initialise les paramètres globaux de LlamaIndex (LLM et Embeddings).
     Charge les variables d'environnement depuis le fichier .env.
+    Gère la robustesse technique (Secrets manquants).
     """
     # 1. Charger les variables d'environnement
     load_dotenv()
     
-    # 2. Vérifier la présence de la clé API OpenAI
+    # 2. Robustesse Chainlit (PBI-051 Fix)
+    if not os.getenv("CHAINLIT_AUTH_SECRET"):
+        logger.warning(
+            "⚠️  CHAINLIT_AUTH_SECRET non trouvé dans l'environnement. "
+            "Utilisation d'un secret de développement par défaut. "
+            "Pour la production, lancez 'chainlit create-secret' et ajoutez-le au .env"
+        )
+        # On injecte une valeur par défaut pour éviter le crash au démarrage
+        os.environ["CHAINLIT_AUTH_SECRET"] = "dev-secret-change-me-in-production-12345"
+    
+    # 3. Vérifier la présence de la clé API OpenAI
     has_openai_key = bool(os.getenv("OPENAI_API_KEY"))
     
     # Si pas de clé, on force le mode test pour utiliser des Mocks
