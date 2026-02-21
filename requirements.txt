@@ -182,7 +182,7 @@ opentelemetry-semantic-conventions==0.60b1
 orjson==3.11.6
 ormsgpack==1.12.2
 overrides==7.7.0
-packaging==25.0
+packaging==24.2
 pandas==2.3.3
 pillow==11.3.0
 platformdirs==4.5.1
