@@ -13,6 +13,10 @@
     - **PBI-055 Flexibilité** : Sélection dynamique du thème partagée entre les modes User et Admin.
 
 ## 💡 LEÇONS APPRISES
+- **Initialisation Précoce** : L'appel à `setup_settings()` au niveau du module dans `main_ui.py` est indispensable pour que Chainlit charge l'environnement avant ses propres décorateurs.
+- **Robustesse vs Sécurité** : L'injection d'un secret de développement par défaut permet d'éviter les frictions lors du premier lancement, mais doit être accompagnée d'un warning console TRÈS explicite.
+- **Persistance Phoenix** : Contrairement aux bases vectorielles, l'observabilité (traces) est souvent oubliée dans les volumes. La persistance de `/root/.arize-phoenix` est vitale pour garder l'historique des audits.
+- **Auto-Audit Immédiat** : Le mini-audit post-ingestion (3 questions flash) réduit drastiquement le cycle de feedback pour l'administrateur, confirmant la qualité de l'indexation en < 10s.
 - **Sécurité Chainlit** : L'activation de l'authentification nécessite impérativement un `CHAINLIT_AUTH_SECRET`. Son absence est un point de blocage critique pour le déploiement.
 - **Dédoublonnage proactif** : L'intégration du hash SHA-256 lors de l'upload admin permet d'éviter la saturation inutile du stockage S3 (MinIO) dès la source.
 - **Orchestration Asynchrone** : L'utilisation de `subprocess.Popen` pour les tâches lourdes (Audit/Ingestion) est vitale pour ne pas bloquer l'Event Loop de Chainlit et préserver la réactivité de l'UI.
