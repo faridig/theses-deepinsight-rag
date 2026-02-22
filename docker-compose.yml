@@ -44,6 +44,31 @@ services:
       - ./docs:/app/docs
       - ./storage:/app/storage
 
+  cockpit:
+    build:
+      context: .
+      dockerfile: Dockerfile.cockpit
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - QDRANT_URL=http://qdrant:6333
+      - MINIO_ENDPOINT_URL=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=theses-data
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:6006/v1/traces
+      - OTEL_SERVICE_NAME=theses-cockpit
+    depends_on:
+      - qdrant
+      - minio
+      - phoenix
+    volumes:
+      - ./data:/app/data
+      - ./docs:/app/docs
+      - ./storage:/app/storage
+
   phoenix:
     image: arizephoenix/phoenix:latest
     ports:

@@ -71,7 +71,71 @@ module.exports = {
 
 ---
 
-## 📊 4. Recommandations Keep/Drop/Custom
+## 🧩 4. Zoom : Le Sélecteur de Thématique (Pattern Hybride)
+
+### Vision Ergonomique
+Pour les sections **"Ingestion theses.fr"** et **"Importation Directe (PDF)"**, nous utilisons le pattern **"Select or Create"**. Ce pattern minimise la charge cognitive tout en offrant une flexibilité totale.
+
+#### Parcours Utilisateur :
+1. **Exploration** : L'utilisateur ouvre le sélecteur (recherche intégrée).
+2. **Sélection** : Il choisit une thématique existante (chargée dynamiquement depuis Qdrant).
+3. **Création** : S'il ne trouve pas son bonheur, l'option `➕ Nouveau thème...` est sélectionnée.
+4. **Saisie** : Un champ de texte apparaît immédiatement pour nommer le nouveau thème.
+
+### Implémentation Streamlit Propre (Spécifications Lead-Dev)
+
+```python
+import streamlit as st
+
+def theme_selector_component(existing_themes, key_prefix=""):
+    """
+    Composant réutilisable pour la sélection de thème avec option de création.
+    Respecte les tokens : Radius 8px, Couleur #2563EB.
+    """
+    options = existing_themes + ["➕ Nouveau thème..."]
+    
+    selected_option = st.selectbox(
+        "Thématique de recherche",
+        options=options,
+        index=0,
+        key=f"{key_prefix}_select",
+        help="Choisissez un thème existant ou créez-en un nouveau."
+    )
+    
+    final_theme = selected_option
+    
+    if selected_option == "➕ Nouveau thème...":
+        final_theme = st.text_input(
+            "Nom du nouveau thème",
+            placeholder="Ex: Intelligence Artificielle...",
+            key=f"{key_prefix}_new",
+            help="Ce nom servira de namespace dans la base vectorielle."
+        )
+        if final_theme:
+            st.info(f"✨ Nouveau thème détecté : **{final_theme}**")
+            
+    return final_theme
+```
+
+### Style CSS Injecté (Design Tokens)
+```python
+st.markdown("""
+    <style>
+    /* Application du Radius 8px & Focus Bleu */
+    .stSelectbox div[data-baseweb="select"], 
+    div[data-testid="stTextInput"] input {
+        border-radius: 8px !important;
+    }
+    .stSelectbox div[data-baseweb="select"]:focus-within {
+        border-color: #2563EB !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+```
+
+---
+
+## 📊 5. Recommandations Keep/Drop/Custom
 
 | Élément | Action | Raison |
 | :--- | :--- | :--- |

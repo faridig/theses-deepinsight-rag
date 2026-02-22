@@ -1,5 +1,22 @@
 # Changelog - Theses-DeepInsight RAG
 
+## [1.11.0] - 2026-02-21
+### Ajouté
+- **Sprint 20 : Cockpit Control Plane & Silence UX (PBI-070)**
+    - Migration complète de la logique d'administration et de gouvernance vers une application Streamlit dédiée (Control Plane).
+    - Déploiement d'un "Health Pulse" visuel pour le monitoring live de Qdrant, MinIO et Arize Phoenix.
+    - Orchestration asynchrone des tâches d'ingestion, de synchronisation S3 et de purge via `subprocess.Popen`.
+    - Application du concept "Silence UX" sur Chainlit : suppression des widgets admin, simplification de l'authentification et focalisation exclusive sur la recherche.
+    - Conteneurisation du Cockpit (`Dockerfile.cockpit`) et intégration multi-services dans `docker-compose.yml`.
+
+## 💡 LEÇONS APPRISES
+- **Découplage UI (Streamlit vs Chainlit)** : L'utilisation de Streamlit pour le Control Plane offre une liberté de design et une gestion des états (widgets complexes, graphiques Plotly) bien supérieure à Chainlit pour les besoins d'administration.
+- **Asynchronisme par Processus** : Le déport des tâches lourdes dans des processus séparés via `subprocess` dans Streamlit permet de garder une interface fluide sans complexité excessive de gestion de threads partagés.
+- **Minimalisme UX** : Réduire l'interface Chainlit à sa fonction primaire (le chat) améliore la clarté pour l'utilisateur final et réduit les risques d'erreurs de manipulation sur les données sensibles.
+- **Homogénéité Docker** : Maintenir des images Docker distinctes pour l'UI et le Cockpit facilite la scalabilité et permet des cycles de mise à jour indépendants pour les fonctions métier et admin.
+- **Sélecteur Hybride & Gouvernance** : L'implémentation d'un pattern "Select or Create" dynamique est la réponse optimale pour éviter la duplication de thèmes. L'utilisation de callbacks `on_change` dans Streamlit est impérative pour garantir que la prévisualisation des données reste cohérente avec les paramètres sélectionnés.
+- **Sourcing Éclairé** : L'ajout d'une étape de prévisualisation (Sourcing Check) avant l'ingestion massive permet d'éviter la pollution de l'index vectoriel par des documents hors-sujet, renforçant la fiabilité du RAG dès la source.
+
 ## [1.10.0] - 2026-02-20
 ### Ajouté
 - **Sprint 19 : Cockpit Governance UI (PBI-051, 052, 053, 054, 055)**
