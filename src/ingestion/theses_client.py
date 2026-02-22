@@ -90,8 +90,8 @@ class ThesesClient:
         params = {
             "q": full_query,
             "format": "json",
-            "rows": rows,
-            "start": start
+            "nombre": rows,
+            "debut": start
         }
         
         try:
