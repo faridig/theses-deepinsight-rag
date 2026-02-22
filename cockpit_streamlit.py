@@ -180,6 +180,7 @@ elif menu == "📥 Ingestion":
             on_change=reset_search
         )
     with col2:
+        # On utilise la valeur directe du widget
         limit = st.number_input(
             "Nombre de thèses", 
             min_value=1, 
@@ -191,7 +192,9 @@ elif menu == "📥 Ingestion":
         
     if st.button("🔍 Rechercher les thèses", use_container_width=True):
         if theme_input:
-            with st.spinner("Recherche sur theses.fr..."):
+            # Force la réinitialisation pour garantir la fraîcheur
+            st.session_state.search_results = None
+            with st.spinner(f"Recherche de {limit} thèses sur theses.fr..."):
                 client = ThesesClient()
                 results = client.search(theme_input, rows=limit)
                 if results:
@@ -199,23 +202,25 @@ elif menu == "📥 Ingestion":
                     st.session_state.last_params = {"theme": theme_input, "limit": limit}
                 else:
                     st.warning("Aucune thèse trouvée.")
-                    st.session_state.search_results = None
         else:
             st.error("Veuillez saisir un thème.")
 
     # Vérification de la cohérence des résultats (PBI-070 - Ergonomie Dynamique)
-    if st.session_state.get("search_results"):
+    search_results = st.session_state.get("search_results")
+    if search_results and isinstance(search_results, list):
         last_params = st.session_state.get("last_params", {})
+        
+        # Comparaison stricte entre les réglages affichés et ceux de la dernière recherche
         if last_params.get("theme") == theme_input and last_params.get("limit") == limit:
-            st.write(f"**Prévisualisation des thèses pour '{theme_input}' :**")
-            df_results = pd.DataFrame(st.session_state.search_results)
+            st.success(f"✅ {len(search_results)} thèses trouvées pour '{theme_input}'")
+            df_results = pd.DataFrame(search_results)
             st.dataframe(df_results[["id", "titre", "auteurs", "university", "discipline"]], use_container_width=True)
             
             if st.button("📥 Démarrer l'ingestion massive", use_container_width=True, type="primary"):
                 cmd = [sys.executable, "scripts/ingest_theme.py", "--theme", theme_input, "--limit", str(limit)]
                 run_async_task(cmd, f"Ingestion pour '{theme_input}' lancée.")
         else:
-            st.info("⚠️ Les paramètres ont changé. Veuillez relancer la recherche pour actualiser la prévisualisation.")
+            st.warning("⚠️ Paramètres modifiés. Veuillez cliquer sur **Rechercher** pour actualiser la prévisualisation.")
 
     st.divider()
     
