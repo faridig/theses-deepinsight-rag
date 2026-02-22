@@ -168,17 +168,31 @@ if menu == "📊 Dashboard":
 elif menu == "📥 Ingestion":
     st.header("Gestion de l'Ingestion")
     
+    engine = RAGEngine()
+    available_themes = engine.get_available_themes()
+    theme_options = ["➕ Nouveau thème..."] + available_themes
+
     # Section 1: theses.fr (PBI-070 Directive 1 - Correction Bug Désynchronisation)
     st.subheader("🌐 Ingestion theses.fr")
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        theme_input = st.text_input(
-            "Thème / Mot-clé", 
-            placeholder="Ex: Intelligence Artificielle",
-            key="theme_input",
+        selected_theme_fr = st.selectbox(
+            "Thématique cible", 
+            options=theme_options, 
+            key="theme_select_fr",
             on_change=reset_search
         )
+        if selected_theme_fr == "➕ Nouveau thème...":
+            theme_input = st.text_input(
+                "Nom du nouveau thème", 
+                placeholder="Ex: Intelligence Artificielle",
+                key="theme_input",
+                on_change=reset_search
+            )
+        else:
+            theme_input = selected_theme_fr
+
     with col2:
         # On utilise la valeur directe du widget
         limit = st.number_input(
@@ -226,11 +240,28 @@ elif menu == "📥 Ingestion":
     
     # Section 2: Upload Direct (PBI-070 Directive 2)
     st.subheader("📁 Importation Directe (PDF)")
-    uploaded_files = st.file_uploader("Choisir des fichiers PDF", type=["pdf"], accept_multiple_files=True)
-    target_theme = st.text_input("Associer au domaine / thème", placeholder="Ex: Énergie Solaire")
+    
+    col_u1, col_u2 = st.columns([2, 1])
+    with col_u1:
+        uploaded_files = st.file_uploader("Choisir des fichiers PDF", type=["pdf"], accept_multiple_files=True)
+    with col_u2:
+        selected_theme_up = st.selectbox(
+            "Associer au domaine", 
+            options=theme_options, 
+            key="theme_select_up"
+        )
+        if selected_theme_up == "➕ Nouveau thème...":
+            target_theme = st.text_input(
+                "Nom du nouveau thème", 
+                placeholder="Ex: Énergie Solaire",
+                key="theme_input_up"
+            )
+        else:
+            target_theme = selected_theme_up
     
     if uploaded_files and target_theme:
         if st.button("🚀 Téléverser et Ingester", use_container_width=True, type="primary"):
+
             with st.spinner("Traitement et Hash SHA-256..."):
                 client = ThesesClient()
                 slug_theme = normalize_theme(target_theme)
