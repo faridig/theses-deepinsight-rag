@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import subprocess
 import time
+import hashlib
 from datetime import datetime
 
 # Add project root to path
@@ -13,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.generation.rag_engine import RAGEngine
 from src.ingestion.theses_client import ThesesClient
 from src.indexing.vector_service import VectorService
+from src.config import normalize_theme
 from scripts.admin_cockpit import get_latest_audit_metrics
 
 # Page Config
@@ -23,7 +25,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS
+# Custom CSS for UI Tokens (PBI-070 Directive 3)
 st.markdown("""
     <style>
     .main {
@@ -35,9 +37,24 @@ st.markdown("""
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .status-ok { color: #28a745; font-weight: bold; }
-    .status-warning { color: #ffc107; font-weight: bold; }
-    .status-error { color: #dc3545; font-weight: bold; }
+    /* DeepInsight Tokens: Bleu #2563EB, Radius 8px */
+    .stButton>button {
+        background-color: #2563EB !important;
+        color: white !important;
+        border-radius: 8px !important;
+        border: none !important;
+        padding: 0.5rem 1rem !important;
+        transition: background-color 0.2s;
+    }
+    .stButton>button:hover {
+        background-color: #1D4ED8 !important;
+    }
+    div[data-baseweb="select"] > div {
+        border-radius: 8px !important;
+    }
+    input {
+        border-radius: 8px !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -82,11 +99,11 @@ def get_health_pulse():
     return health
 
 def run_async_task(cmd, success_message):
-    """Lance une tâche asynchrone et affiche un message."""
+    """Lance une tâche asynchrone et affiche un message (PBI-070 Directive 3)."""
     try:
         subprocess.Popen(cmd)
         st.success(f"🚀 {success_message}")
-        st.info("La tâche s'exécute en arrière-plan. Consultez les logs pour plus de détails.")
+        st.info("La tâche s'exécute en arrière-plan.")
     except Exception as e:
         st.error(f"❌ Erreur lors du lancement : {e}")
 
@@ -147,6 +164,7 @@ if menu == "📊 Dashboard":
 elif menu == "📥 Ingestion":
     st.header("Gestion de l'Ingestion")
     
+    # Section 1: theses.fr (PBI-070 Directive 1)
     st.subheader("🌐 Ingestion theses.fr")
     col1, col2 = st.columns([2, 1])
     
@@ -155,17 +173,78 @@ elif menu == "📥 Ingestion":
     with col2:
         limit = st.number_input("Nombre de thèses", min_value=1, max_value=100, value=10)
         
-    if st.button("📥 Démarrer l'ingestion"):
+    if st.button("🔍 Rechercher les thèses", use_container_width=True):
         if theme_input:
-            cmd = [sys.executable, "scripts/ingest_theme.py", "--theme", theme_input, "--limit", str(limit)]
-            run_async_task(cmd, f"Ingestion pour '{theme_input}' lancée.")
+            with st.spinner("Recherche sur theses.fr..."):
+                client = ThesesClient()
+                results = client.search(theme_input, rows=limit)
+                if results:
+                    st.session_state.search_results = results
+                    st.session_state.search_theme = theme_input
+                else:
+                    st.warning("Aucune thèse trouvée.")
+                    st.session_state.search_results = None
         else:
             st.error("Veuillez saisir un thème.")
 
+    if st.session_state.get("search_results") and st.session_state.get("search_theme") == theme_input:
+        st.write(f"**Prévisualisation des thèses pour '{theme_input}' :**")
+        df_results = pd.DataFrame(st.session_state.search_results)
+        st.dataframe(df_results[["id", "titre", "auteurs", "university", "discipline"]], use_container_width=True)
+        
+        if st.button("📥 Démarrer l'ingestion massive", use_container_width=True, type="primary"):
+            cmd = [sys.executable, "scripts/ingest_theme.py", "--theme", theme_input, "--limit", str(limit)]
+            run_async_task(cmd, f"Ingestion pour '{theme_input}' lancée.")
+
     st.divider()
     
+    # Section 2: Upload Direct (PBI-070 Directive 2)
     st.subheader("📁 Importation Directe (PDF)")
-    st.info("Utilisez l'interface Chainlit pour uploader des fichiers spécifiques (PBI-054).")
+    uploaded_files = st.file_uploader("Choisir des fichiers PDF", type=["pdf"], accept_multiple_files=True)
+    target_theme = st.text_input("Associer au domaine / thème", placeholder="Ex: Énergie Solaire")
+    
+    if uploaded_files and target_theme:
+        if st.button("🚀 Téléverser et Ingester", use_container_width=True, type="primary"):
+            with st.spinner("Traitement et Hash SHA-256..."):
+                client = ThesesClient()
+                slug_theme = normalize_theme(target_theme)
+                count = 0
+                for uploaded_file in uploaded_files:
+                    file_bytes = uploaded_file.getvalue()
+                    file_hash = hashlib.sha256(file_bytes).hexdigest()
+                    
+                    # 1. Sauvegarde du PDF (Dédoublonnage Hash)
+                    if client.fs and client.bucket:
+                        pdf_path = f"{client.bucket}/pdfs/{file_hash}.pdf"
+                        if not client.fs.exists(pdf_path):
+                            with client.fs.open(pdf_path, "wb") as f:
+                                f.write(file_bytes)
+                        
+                        # 2. Sauvegarde de la référence thématique
+                        ref_path = f"{client.bucket}/themes/{slug_theme}/{uploaded_file.name}.ref"
+                        if not client.fs.exists(ref_path):
+                            client.fs.makedirs(os.path.dirname(ref_path), exist_ok=True)
+                            with client.fs.open(ref_path, "w") as f:
+                                f.write(file_hash)
+                    else:
+                        # Fallback Local
+                        local_pdf_path = os.path.join("data/pdfs", f"{file_hash}.pdf")
+                        os.makedirs("data/pdfs", exist_ok=True)
+                        if not os.path.exists(local_pdf_path):
+                            with open(local_pdf_path, "wb") as f:
+                                f.write(file_bytes)
+                        
+                        ref_dir = os.path.join("data/themes", slug_theme)
+                        os.makedirs(ref_dir, exist_ok=True)
+                        with open(os.path.join(ref_dir, f"{uploaded_file.name}.ref"), "w") as f:
+                            f.write(file_hash)
+                            
+                    count += 1
+                
+                st.success(f"✅ {count} fichiers prêts pour le thème '{slug_theme}'.")
+                # Lancement de l'indexation asynchrone
+                cmd = [sys.executable, "scripts/ingest_theme.py", "--theme", target_theme, "--s3-only"]
+                run_async_task(cmd, f"Indexation pour '{target_theme}' lancée.")
 
 elif menu == "⚙️ Gouvernance":
     st.header("Gouvernance des Données")
@@ -189,7 +268,6 @@ elif menu == "⚙️ Gouvernance":
                 
         with col2:
             if st.button("🚀 Audit Thématique", use_container_width=True):
-                # On pourrait filtrer l'audit par thème si le script le supporte
                 run_async_task([sys.executable, "scripts/audit_quality.py"], f"Audit pour '{selected_theme}' lancé.")
                 
         with col3:
