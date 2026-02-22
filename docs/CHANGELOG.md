@@ -14,6 +14,8 @@
 - **Asynchronisme par Processus** : Le déport des tâches lourdes dans des processus séparés via `subprocess` dans Streamlit permet de garder une interface fluide sans complexité excessive de gestion de threads partagés.
 - **Minimalisme UX** : Réduire l'interface Chainlit à sa fonction primaire (le chat) améliore la clarté pour l'utilisateur final et réduit les risques d'erreurs de manipulation sur les données sensibles.
 - **Homogénéité Docker** : Maintenir des images Docker distinctes pour l'UI et le Cockpit facilite la scalabilité et permet des cycles de mise à jour indépendants pour les fonctions métier et admin.
+- **Sélecteur Hybride & Gouvernance** : L'implémentation d'un pattern "Select or Create" dynamique est la réponse optimale pour éviter la duplication de thèmes. L'utilisation de callbacks `on_change` dans Streamlit est impérative pour garantir que la prévisualisation des données reste cohérente avec les paramètres sélectionnés.
+- **Sourcing Éclairé** : L'ajout d'une étape de prévisualisation (Sourcing Check) avant l'ingestion massive permet d'éviter la pollution de l'index vectoriel par des documents hors-sujet, renforçant la fiabilité du RAG dès la source.
 
 ## [1.10.0] - 2026-02-20
 ### Ajouté
