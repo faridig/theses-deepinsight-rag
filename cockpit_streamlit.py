@@ -75,6 +75,10 @@ with st.sidebar:
 
 # --- Functions ---
 
+def reset_search():
+    """Réinitialise les résultats de recherche lors d'un changement de paramètres."""
+    st.session_state.search_results = None
+
 def get_health_pulse():
     """Vérifie la santé des services."""
     health = {}
@@ -164,14 +168,26 @@ if menu == "📊 Dashboard":
 elif menu == "📥 Ingestion":
     st.header("Gestion de l'Ingestion")
     
-    # Section 1: theses.fr (PBI-070 Directive 1)
+    # Section 1: theses.fr (PBI-070 Directive 1 - Correction Bug Désynchronisation)
     st.subheader("🌐 Ingestion theses.fr")
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        theme_input = st.text_input("Thème / Mot-clé", placeholder="Ex: Intelligence Artificielle")
+        theme_input = st.text_input(
+            "Thème / Mot-clé", 
+            placeholder="Ex: Intelligence Artificielle",
+            key="theme_input",
+            on_change=reset_search
+        )
     with col2:
-        limit = st.number_input("Nombre de thèses", min_value=1, max_value=100, value=10)
+        limit = st.number_input(
+            "Nombre de thèses", 
+            min_value=1, 
+            max_value=100, 
+            value=10,
+            key="limit_input",
+            on_change=reset_search
+        )
         
     if st.button("🔍 Rechercher les thèses", use_container_width=True):
         if theme_input:
@@ -180,21 +196,26 @@ elif menu == "📥 Ingestion":
                 results = client.search(theme_input, rows=limit)
                 if results:
                     st.session_state.search_results = results
-                    st.session_state.search_theme = theme_input
+                    st.session_state.last_params = {"theme": theme_input, "limit": limit}
                 else:
                     st.warning("Aucune thèse trouvée.")
                     st.session_state.search_results = None
         else:
             st.error("Veuillez saisir un thème.")
 
-    if st.session_state.get("search_results") and st.session_state.get("search_theme") == theme_input:
-        st.write(f"**Prévisualisation des thèses pour '{theme_input}' :**")
-        df_results = pd.DataFrame(st.session_state.search_results)
-        st.dataframe(df_results[["id", "titre", "auteurs", "university", "discipline"]], use_container_width=True)
-        
-        if st.button("📥 Démarrer l'ingestion massive", use_container_width=True, type="primary"):
-            cmd = [sys.executable, "scripts/ingest_theme.py", "--theme", theme_input, "--limit", str(limit)]
-            run_async_task(cmd, f"Ingestion pour '{theme_input}' lancée.")
+    # Vérification de la cohérence des résultats (PBI-070 - Ergonomie Dynamique)
+    if st.session_state.get("search_results"):
+        last_params = st.session_state.get("last_params", {})
+        if last_params.get("theme") == theme_input and last_params.get("limit") == limit:
+            st.write(f"**Prévisualisation des thèses pour '{theme_input}' :**")
+            df_results = pd.DataFrame(st.session_state.search_results)
+            st.dataframe(df_results[["id", "titre", "auteurs", "university", "discipline"]], use_container_width=True)
+            
+            if st.button("📥 Démarrer l'ingestion massive", use_container_width=True, type="primary"):
+                cmd = [sys.executable, "scripts/ingest_theme.py", "--theme", theme_input, "--limit", str(limit)]
+                run_async_task(cmd, f"Ingestion pour '{theme_input}' lancée.")
+        else:
+            st.info("⚠️ Les paramètres ont changé. Veuillez relancer la recherche pour actualiser la prévisualisation.")
 
     st.divider()
     
