@@ -62,9 +62,6 @@ async def test_s3_download_mock(s3_config):
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        import hashlib
-        expected_hash = hashlib.sha256(test_content).hexdigest()
-
         result = client.download_pdf(test_id, test_url, theme="test-theme")
         path = result["path"]
         
