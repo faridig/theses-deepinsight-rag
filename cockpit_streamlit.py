@@ -120,7 +120,7 @@ def run_async_task(cmd, success_message):
 def st_mermaid(code: str, height: int = 850):
     """Rendu d'un diagramme Mermaid dans Streamlit (PBI-078)."""
     html_code = f"""
-    <div class="mermaid" style="display: flex; justify-content: center; align-items: flex-start;">
+    <div class="mermaid" style="display: flex; justify-content: center; align-items: flex-start; padding-top: 20px;">
         {code}
     </div>
     <script type="module">
@@ -134,7 +134,11 @@ def st_mermaid(code: str, height: int = 850):
                 'primaryBorderColor': '#1D4ED8',
                 'lineColor': '#2563EB',
                 'secondaryColor': '#007bff',
-                'tertiaryColor': '#ffffff'
+                'tertiaryColor': '#ffffff',
+                'edgeLabelBackground':'#2563EB',
+                'edgeLabelTextColor':'#ffffff',
+                'fontFamily': 'Segoe UI, Arial',
+                'fontSize': '14px'
             }}
         }});
     </script>
@@ -497,32 +501,64 @@ elif menu == "🏗️ Architecture":
     
     mermaid_code = """
 graph TD
+    %% Direction du flux
+    direction TB
+
     subgraph "Phase d'Ingestion (Locale)"
-        PDF[📄 PDF Thèse] -->|Parsing| DL(🛠️ Docling)
-        DL -->|Markdown| MD[📝 Texte Markdown]
-        MD -->|Extraction| SLM(🧠 SLM Metadata)
-        SLM -->|Enrichissement| META[🏷️ Métadonnées]
+        PDF["📄 PDF Thèse"]
+        DL["🛠️ Docling"]
+        MD["📝 Texte Markdown"]
+        SLM["🧠 SLM Metadata"]
+        META["🏷️ Métadonnées"]
+        
+        PDF -->|Parsing| DL
+        DL -->|Markdown| MD
+        MD -->|Extraction| SLM
+        SLM -->|Enrichissement| META
     end
     
     subgraph "Phase d'Indexation (S3 & Vector)"
-        MD -->|Stockage| S3(🪣 MinIO S3)
-        META -->|Embedding| EMB(🔢 text-embedding-3)
-        EMB -->|Vecteurs| QDR(🔍 Qdrant)
+        S3["🪣 MinIO S3"]
+        EMB["🔢 text-embedding-3"]
+        QDR["🔍 Qdrant"]
+        
+        MD -->|Stockage| S3
+        META -->|Embedding| EMB
+        EMB -->|Vecteurs| QDR
     end
     
     subgraph "Phase de Génération (Hybrid)"
-        User[❓ Question Utilisateur] -->|Search| QDR
-        QDR -->|Context| RAG(⚙️ RAG Engine)
-        RAG -->|Prompt| LLM(🤖 GPT-4o-mini)
-        LLM -->|Réponse| Final[✅ Réponse Finale]
+        User["❓ Question Utilisateur"]
+        RAG["⚙️ RAG Engine"]
+        LLM["🤖 GPT-4o-mini"]
+        Final["✅ Réponse Finale"]
+        
+        User -->|Search| QDR
+        QDR -->|Context| RAG
+        RAG -->|Prompt| LLM
+        LLM -->|Réponse| Final
     end
-    
-    style PDF fill:#f9f,stroke:#333,stroke-width:2px
-    style S3 fill:#69f,stroke:#333,stroke-width:2px
-    style QDR fill:#6f9,stroke:#333,stroke-width:2px
-    style LLM fill:#f96,stroke:#333,stroke-width:2px
+
+    %% Styles CSS inspirés de l'image
+    classDef pdfStyle fill:#f472b6,stroke:#db2777,stroke-width:2px,color:#fff;
+    classDef toolStyle fill:#2563eb,stroke:#1e40af,stroke-width:2px,color:#fff;
+    classDef dataStyle fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff;
+    classDef brainStyle fill:#6366f1,stroke:#4f46e5,stroke-width:2px,color:#fff;
+    classDef generationStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff;
+    classDef successStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff;
+
+    class PDF pdfStyle;
+    class DL,S3,QDR,EMB,RAG toolStyle;
+    class MD,META dataStyle;
+    class SLM brainStyle;
+    class LLM,User generationStyle;
+    class Final successStyle;
+
+    %% Style des arcs
+    linkStyle default stroke:#2563eb,stroke-width:2px;
 """
-    st_mermaid(mermaid_code, height=600)
+    st_mermaid(mermaid_code, height=900)
+
     
     st.info("💡 Les étapes de Parsing et d'Extraction de métadonnées sont réalisées localement pour garantir la confidentialité et réduire les coûts.")
     
