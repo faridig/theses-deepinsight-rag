@@ -68,11 +68,21 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-053** | **[ADMIN] Dashboard Qualité & Ragas** | Visualisation scores Fidélité/Pertinence et historique graphique. | DONE | HAUTE |
 | **PBI-054** | **[ADMIN] Pilotage & Ingestion UI** | Interface de déclenchement d'ingestion/audit avec barre de progression. | DONE | HAUTE |
 | **PBI-055** | **[ADMIN] Moniteur de Coûts & Thèmes** | Suivi des tokens OpenAI et statistiques détaillées des collections Qdrant. | DONE | MOYENNE |
-| **PBI-056** | **[ADMIN] Gestionnaire de Thèmes Hybride** | Création/Sélection dynamique de thèmes et indexation via upload UI. | IN_PROGRESS | HAUTE |
-| **PBI-057** | **[ADMIN] Ingestion thématique à la demande** | Scraping automatisé de theses.fr (Top 10) via mot-clé saisi dans l'UI. | PENDING | HAUTE |
-| **PBI-058** | **[ADMIN] Auto-Audit Qualité Post-Ingestion** | Validation immédiate de la fidélité (Faithfulness) après ajout de données. | PENDING | MOYENNE |
-| **PBI-061** | **[TECH] Infrastructure Résiliente** | Persistance du cache d'ingestion et de l'historique Arize Phoenix. | PENDING | HAUTE |
-| **PBI-062** | **[ADMIN] Gouvernance & Souveraineté** | Cycle de vie (Delete/Purge) et Re-Sync des thèmes depuis MinIO. | PENDING | HAUTE |
+| **PBI-056** | **[ADMIN] Gestionnaire de Thèmes Hybride** | Création/Sélection dynamique de thèmes et indexation via upload UI. | DONE | HAUTE |
+| **PBI-057** | **[ADMIN] Ingestion thématique à la demande** | Scraping automatisé de theses.fr (Top 10) via mot-clé saisi dans l'UI. | DONE | HAUTE |
+| **PBI-058** | **[ADMIN] Auto-Audit Qualité Post-Ingestion** | Validation immédiate de la fidélité (Faithfulness) après ajout de données. | DONE | MOYENNE |
+| **PBI-061** | **[TECH] Infrastructure Résiliente** | Persistance du cache d'ingestion et de l'historique Arize Phoenix. | DONE | HAUTE |
+| **PBI-062** | **[ADMIN] Gouvernance & Souveraineté** | Cycle de vie (Delete/Purge) et Re-Sync des thèmes depuis MinIO. | DONE | HAUTE |
+| **PBI-070** | **[ADMIN] Cockpit Control Plane (Streamlit)** | Centralisation de la gouvernance dans une application Streamlit dédiée. | DONE | CRITIQUE |
+| **PBI-071** | **[INFRA] Grand Nettoyage S3 (Housekeeping)** | Purge des buckets inutiles et migration des fichiers orphelins vers la structure cible. | PENDING | CRITIQUE |
+| **PBI-072** | **[INFRA] Réorganisation Thématique S3** | Migration physique des PDF du dossier `pdfs/` vers `themes/{nom_theme}/` pour plus de clarté visuelle. | PENDING | HAUTE |
+| **PBI-073** | **[ADMIN] Synchronisation Totale Purge UI** | Correction du bug de suppression : garantir que `delete_collection` (Qdrant) entraîne la purge physique sur MinIO. | PENDING | CRITIQUE |
+| **PBI-075** | **[UX/ADMIN] Guide Contextuel & Aide aux Metrics** | Intégration d'infobulles et d'une section "Interprétation" dans le Dashboard Qualité. | PENDING | MOYENNE |
+| **PBI-076** | **[TECH] Activation & Correction de Context Precision** | Re-câblage de `ground_truth.json` + Affichage Context Precision dans le Cockpit. | PENDING | CRITIQUE |
+| **PBI-077** | **[ADMIN] Sourcing Check (Prévisualisation)** | Affichage d'un tableau récapitulatif (Titres/Années) avant de déclencher l'ingestion massive. | PENDING | MOYENNE |
+| **PBI-078** | **[UX/ADMIN] Visualisation du Flux (Architecture View)** | Ajout d'un onglet pédagogique montrant le parcours d'une thèse (Parsing -> SLM -> Qdrant). | PENDING | MOYENNE |
+| **PBI-079** | **[TECH] Infra SLM Local (Ollama/vLLM)** | Intégration d'un service de LLM local (Llama 3.2) dans Docker pour les tâches asynchrones. | PENDING | HAUTE |
+| **PBI-080** | **[TECH] Handoff Métadonnées SLM** | Migration de `TitleExtractor` et `SummaryExtractor` vers le LLM local pour supprimer les coûts d'ingestion. | PENDING | HAUTE |
 
 ---
 
@@ -89,4 +99,4 @@ Tout ticket entrant en Sprint doit comporter :
 - **Nouveauté Sprint 19** : Intégration asynchrone pour l'interface Admin afin de ne pas bloquer le thread principal Chainlit.
 
 ---
-*Dernière mise à jour : 21/02/2026*
+*Dernière mise à jour : 23/02/2026*

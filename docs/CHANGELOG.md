@@ -1,6 +1,6 @@
 # Changelog - Theses-DeepInsight RAG
 
-## [1.11.0] - 2026-02-21
+## [1.11.0] - 2026-02-23
 ### Ajouté
 - **Sprint 20 : Cockpit Control Plane & Silence UX (PBI-070)**
     - Migration complète de la logique d'administration et de gouvernance vers une application Streamlit dédiée (Control Plane).

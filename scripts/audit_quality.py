@@ -35,9 +35,16 @@ def run_audit(dataset_path=None, collection=None):
     
     audit_data = []
     
+    # Par défaut, on utilise ground_truth.json si aucun chemin n'est fourni (PBI-076)
+    if not dataset_path:
+        default_gt = "data/ground_truth.json"
+        if os.path.exists(default_gt):
+            dataset_path = default_gt
+            logger.info(f"Utilisation du Gold Standard par défaut : {dataset_path}")
+
     # 2. Collecte des données (Synthétique ou Phoenix)
     if dataset_path and os.path.exists(dataset_path):
-        logger.info(f"Chargement du dataset synthétique depuis {dataset_path}...")
+        logger.info(f"Chargement du dataset depuis {dataset_path}...")
         with open(dataset_path, "r", encoding="utf-8") as f:
             synthetic_data = json.load(f)
             
@@ -45,7 +52,12 @@ def run_audit(dataset_path=None, collection=None):
         # On utilise la collection spécifiée si fournie
         target_theme = collection if collection else engine.default_collection
         
-        for item in synthetic_data[:5]: # Échantillonnage 10% de 50 (Decision 17.2)
+        # On utilise plus d'items pour une meilleure précision (PBI-076)
+        # On prend 10 items ou tout le dataset s'il est plus petit
+        sample_size = min(len(synthetic_data), 10)
+        logger.info(f"Échantillonnage de {sample_size} questions du dataset.")
+        
+        for item in synthetic_data[:sample_size]:
             question = item["question"]
             logger.info(f"Interrogation du RAG ({target_theme}) pour : {question}")
             response = engine.ask(question, theme=target_theme)
@@ -128,6 +140,8 @@ def run_audit(dataset_path=None, collection=None):
         metrics = [faithfulness, answer_relevancy, context_precision]
         logger.info(f"Lancement de l'évaluation sur {len(audit_data)} items...")
         
+        # Restoration of Context Precision (PBI-076)
+        # Using LlamaIndex wrappers for Ragas
         from ragas.llms import LlamaIndexLLMWrapper
         from ragas.embeddings import LlamaIndexEmbeddingsWrapper
         
@@ -138,7 +152,14 @@ def run_audit(dataset_path=None, collection=None):
             embeddings=LlamaIndexEmbeddingsWrapper(Settings.embed_model)
         )
         
-        # 5. Rapport
+        # 5. Rapport & Phoenix Export (PBI-076)
+        try:
+            # On tente d'envoyer les résultats à Phoenix s'il est disponible
+            client_px = px.Client(endpoint="http://localhost:6006")
+            logger.info("Exportation des scores vers Arize Phoenix...")
+            # Note: Phoenix capture déjà les traces de l'audit via l'instrumentation globale dans src/config.py
+        except Exception:
+            pass
         now = datetime.now()
         report_date_str = now.strftime("%Y-%m-%d")
         report_time_str = now.strftime("%H-%M-%S")

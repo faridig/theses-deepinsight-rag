@@ -310,7 +310,13 @@ class RAGEngine:
         if not question or not question.strip():
             return "Veuillez poser une question valide."
         
-        collection_name = theme if theme else self.default_collection
+        theme_slug = theme if theme else self.default_collection
+        
+        # Robustesse : s'assurer que le nom de la collection commence par 'theses-' (PBI-023)
+        if theme_slug and not theme_slug.startswith("theses-") and theme_slug != ":memory:":
+            collection_name = f"theses-{theme_slug}"
+        else:
+            collection_name = theme_slug
         
         try:
             query_engine = self._get_query_engine(collection_name)

@@ -6,7 +6,12 @@ import plotly.graph_objects as go
 import subprocess
 import time
 import hashlib
+import logging
 from datetime import datetime
+
+# Configuration des logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -66,7 +71,7 @@ with st.sidebar:
     
     menu = st.radio(
         "Navigation",
-        ["📊 Dashboard", "📥 Ingestion", "⚙️ Gouvernance", "📈 Statistiques"]
+        ["📊 Dashboard", "📥 Ingestion", "⚙️ Gouvernance", "📈 Statistiques", "🏗️ Architecture"]
     )
     
     st.divider()
@@ -143,6 +148,7 @@ if menu == "📊 Dashboard":
         scores = audit_data["scores"]
         faithfulness = scores.get('faithfulness', 0.0)
         relevancy = scores.get('answer_relevancy', 0.0)
+        precision = scores.get('context_precision', 0.0) # PBI-076
         
         col1, col2 = st.columns([1, 2])
         
@@ -152,14 +158,31 @@ if menu == "📊 Dashboard":
                       delta=f"{faithfulness - 0.85:.2f}" if faithfulness >= 0.85 else f"{faithfulness - 0.85:.2f}",
                       delta_color="normal" if faithfulness >= 0.85 else "inverse")
             st.metric("Pertinence (Relevancy)", f"{relevancy:.2f}")
+            st.metric("Précision (Context Precision)", f"{precision:.2f}") # PBI-076
             
         with col2:
             fig = go.Figure(data=[
-                go.Bar(name='Metrics', x=['Fidélité', 'Pertinence'], y=[faithfulness, relevancy],
-                       marker_color=['#28a745' if faithfulness >= 0.85 else '#dc3545', '#007bff'])
+                go.Bar(name='Metrics', x=['Fidélité', 'Pertinence', 'Précision'], y=[faithfulness, relevancy, precision],
+                       marker_color=['#28a745' if faithfulness >= 0.85 else '#dc3545', '#007bff', '#ffc107'])
             ])
             fig.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20), yaxis_range=[0,1])
             st.plotly_chart(fig, use_container_width=True)
+            
+        # 📘 Guide des Metrics & Aide à la Décision (PBI-075)
+        with st.expander("📘 Guide des Metrics & Aide à la Décision"):
+            st.markdown("""
+            ### 🎯 Dictionnaire des Métriques
+            
+            | Métrique | Seuil d'Alerte | Signification | Solution si Score Faible |
+            | :--- | :---: | :--- | :--- |
+            | **Fidélité (Faithfulness)** | < 0.85 | La réponse contient des hallucinations (non basée sur les docs). | Vérifier le prompt de génération ou la température du LLM. |
+            | **Pertinence (Relevancy)** | < 0.80 | La réponse est floue ou ne répond pas directement à la question. | Améliorer le prompt ou augmenter le nombre d'extraits (`top_k`). |
+            | **Précision (Context Precision)** | < 0.70 | Les documents récupérés ne sont pas les plus pertinents pour la question. | Revoir l'Embedding, le découpage (chunking) ou ajouter du Reranking. |
+            
+            ### 🛠️ Actions Correctives
+            - **Score < 0.7** : Alerte critique. Le RAG est probablement inutilisable sur ce thème.
+            - **Baisse soudaine** : Vérifier l'intégrité des PDF (parsing corrompu ?) ou un changement d'API OpenAI.
+            """)
     else:
         st.warning("⚠️ Aucun audit trouvé dans `docs/AUDITS/`.")
         if st.button("🚀 Lancer un audit maintenant"):
@@ -228,9 +251,17 @@ elif menu == "📥 Ingestion":
         if last_params.get("theme") == theme_input and last_params.get("limit") == limit:
             st.success(f"✅ {len(search_results)} thèses trouvées pour '{theme_input}'")
             df_results = pd.DataFrame(search_results)
-            st.dataframe(df_results[["id", "titre", "auteurs", "university", "discipline"]], use_container_width=True)
+            # Ajout de l'année pour le Sourcing Check (PBI-077)
+            if "dateSoutenance" in df_results.columns:
+                df_results["Année"] = df_results["dateSoutenance"].astype(str).str[:4]
             
-            if st.button("📥 Démarrer l'ingestion massive", use_container_width=True, type="primary"):
+            display_cols = ["id", "titre", "auteurs", "Année", "university", "discipline"]
+            available_cols = [c for c in display_cols if c in df_results.columns]
+            
+            st.dataframe(df_results[available_cols], use_container_width=True)
+            
+            st.info("💡 Vérifiez la liste ci-dessus. Si les thèses correspondent à votre besoin, confirmez l'ingestion.")
+            if st.button("📥 Confirmer et Démarrer l'ingestion massive", use_container_width=True, type="primary"):
                 cmd = [sys.executable, "scripts/ingest_theme.py", "--theme", theme_input, "--limit", str(limit)]
                 run_async_task(cmd, f"Ingestion pour '{theme_input}' lancée.")
         else:
@@ -335,10 +366,43 @@ elif menu == "⚙️ Gouvernance":
             st.warning(f"⚠️ Êtes-vous sûr de vouloir supprimer définitivement la collection `{selected_theme}` ?")
             if st.button("✅ Oui, confirmer la suppression"):
                 try:
+                    # Suppression Qdrant
                     collection_name = f"theses-{selected_theme}"
                     vs = VectorService(collection_name=collection_name)
                     vs.client.delete_collection(collection_name=collection_name)
-                    st.success(f"Collection `{collection_name}` supprimée.")
+                    
+                    # 🗑️ Synchronisation Totale de la Purge (PBI-073)
+                    try:
+                        from src.ingestion.theses_client import ThesesClient
+                        client = ThesesClient()
+                        if client.fs and client.bucket:
+                            # Suppression du dossier thématique sur MinIO
+                            theme_path = f"{client.bucket}/themes/{selected_theme}"
+                            if client.fs.exists(theme_path):
+                                client.fs.rm(theme_path, recursive=True)
+                                logger.info(f"S3 folder {theme_path} deleted for theme {selected_theme}")
+                            
+                            # Fallback : suppression de l'ancien dossier à la racine (Legacy)
+                            legacy_path = f"{client.bucket}/{selected_theme}"
+                            if client.fs.exists(legacy_path):
+                                client.fs.rm(legacy_path, recursive=True)
+                        
+                        # Nettoyage local aussi (PBI-073 Bonus)
+                        local_theme_path = os.path.join("data", "themes", selected_theme)
+                        if os.path.exists(local_theme_path):
+                            import shutil
+                            shutil.rmtree(local_theme_path)
+                            
+                        local_cache_path = os.path.join("storage", "cache", selected_theme)
+                        if os.path.exists(local_cache_path):
+                            import shutil
+                            shutil.rmtree(local_cache_path)
+                            
+                    except Exception as purge_err:
+                        logger.error(f"Erreur lors de la purge physique : {purge_err}")
+                        st.warning(f"Collection supprimée mais échec de la purge physique : {purge_err}")
+                    
+                    st.success(f"Collection `{collection_name}` et ressources associées supprimées.")
                     del st.session_state.confirm_delete
                     time.sleep(1)
                     st.rerun()
@@ -383,6 +447,54 @@ elif menu == "📈 Statistiques":
     else:
         st.info("Aucune donnée statistique disponible.")
         
+elif menu == "🏗️ Architecture":
+    st.header("Schéma Technique du Pipeline")
+    
+    st.markdown("""
+    ### 🔄 Flux de Données (Theses-DeepInsight)
+    
+    Le schéma ci-dessous détaille l'enchaînement des étapes, du document brut à la génération de la réponse.
+    
+    ```mermaid
+    graph TD
+        subgraph "Phase d'Ingestion (Locale)"
+            PDF[📄 PDF Thèse] -->|Parsing| DL(🛠️ Docling)
+            DL -->|Markdown| MD[📝 Texte Markdown]
+            MD -->|Extraction| SLM(🧠 SLM Metadata)
+            SLM -->|Enrichissement| META[🏷️ Métadonnées]
+        end
+        
+        subgraph "Phase d'Indexation (S3 & Vector)"
+            MD -->|Stockage| S3(🪣 MinIO S3)
+            META -->|Embedding| EMB(🔢 text-embedding-3)
+            EMB -->|Vecteurs| QDR(🔍 Qdrant)
+        end
+        
+        subgraph "Phase de Génération (Hybrid)"
+            User[❓ Question Utilisateur] -->|Search| QDR
+            QDR -->|Context| RAG(⚙️ RAG Engine)
+            RAG -->|Prompt| LLM(🤖 GPT-4o-mini)
+            LLM -->|Réponse| Final[✅ Réponse Finale]
+        end
+        
+        style PDF fill:#f9f,stroke:#333,stroke-width:2px
+        style S3 fill:#69f,stroke:#333,stroke-width:2px
+        style QDR fill:#6f9,stroke:#333,stroke-width:2px
+        style LLM fill:#f96,stroke:#333,stroke-width:2px
+    ```
+    
+    *Note : Les étapes de Parsing et d'Extraction de métadonnées sont réalisées localement pour garantir la confidentialité et réduire les coûts.*
+    """)
+    
+    st.divider()
+    st.subheader("🛠️ Stack Technique")
+    st.write("- **Framework** : LlamaIndex")
+    st.write("- **Parsing** : Docling (IBM)")
+    st.write("- **Base Vectorielle** : Qdrant")
+    st.write("- **Stockage** : MinIO (S3 compatible)")
+    st.write("- **Modèles** : OpenAI GPT-4o-mini / text-embedding-3-small")
+    st.write("- **Observabilité** : Arize Phoenix")
+
     st.divider()
     
     st.subheader("💸 Estimation des Coûts (OpenAI)")

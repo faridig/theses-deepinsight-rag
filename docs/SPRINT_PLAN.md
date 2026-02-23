@@ -1,69 +1,82 @@
-# SPRINT PLAN N°20 : "Knowledge Autonomy & Resilience"
+# SPRINT PLAN N°21 : "Clean Slate & Gold Standard"
 
-**Sprint Goal** : Donner une autonomie totale et résiliente à l'administrateur pour piloter le cycle de vie des données (Ingestion, Audit, Purge) via une interface robuste et conforme à la charte "DeepInsight".
+**Sprint Goal** : Assurer l'intégrité totale du système par un nettoyage profond de l'infrastructure S3, la synchronisation des suppressions et la restauration de la métrique "Context Precision" via le référentiel de vérité.
 
-**Statut** : VALIDÉ (Ready for Dev)
+**Statut** : EN ATTENTE DE VALIDATION
 
 ---
 
-## [PBI-061] [TECH] Infrastructure Résiliente (Persistence)
+## 🧹 VOLET 1 : INFRASTRUCTURE & HYGIÈNE
+
+### [PBI-071] Grand Nettoyage S3 (Housekeeping)
 **Priorité** : Haute | **Estimation** : S
-
-**User Story** : "En tant que Développeur, je veux que les données critiques (Cache, Phoenix, Docs) soient persistées via des volumes Docker, afin d'éviter toute perte de données lors du redémarrage des services."
+**User Story** : "En tant qu'Administrateur, je veux que les buckets inutiles soient supprimés et les fichiers orphelins (racine) soient nettoyés, afin de maintenir une source de vérité propre."
 **Critères d'Acceptation** :
-- [ ] Le `docker-compose.yml` inclut des volumes pour Arize Phoenix (DB locale).
-- [ ] Le dossier `./storage` est monté dans le conteneur `ui` pour conserver l'`IngestionCache`.
-- [ ] Les chemins de stockage sont unifiés et testés après un `docker compose restart`.
+- [ ] Suppression de tous les buckets MinIO sauf `theses-data`.
+- [ ] Migration du fichier PDF orphelin à la racine vers un dossier de secours ou thématique.
+- [ ] Suppression du dossier `agriculture` vide/orphelin à la racine.
+
+### [PBI-072] Réorganisation Thématique Physique
+**Priorité** : Moyenne | **Estimation** : M
+**User Story** : "En tant qu'Administrateur, je veux que les PDFs soient rangés physiquement par thèmes dans MinIO, afin de pouvoir naviguer visuellement dans mes documents."
+**Critères d'Acceptation** :
+- [ ] Migration des fichiers : `theses-data/pdfs/{hash}.pdf` -> `theses-data/themes/{theme}/docs/{filename}.pdf`.
+- [ ] Mise à jour du `ThemeIngestor` pour pointer vers ces nouveaux chemins.
+
+### [PBI-073] Synchronisation Totale de la Purge
+**Priorité** : Critique | **Estimation** : S
+**User Story** : "En tant qu'Administrateur, je veux que la suppression d'une collection dans le Cockpit efface aussi les fichiers dans MinIO, afin d'éviter les collections fantômes."
+**Critères d'Acceptation** :
+- [ ] GIVEN une collection "animaux-zoologie" existante dans Qdrant et MinIO.
+- [ ] WHEN je clique sur "Supprimer" dans le Cockpit.
+- [ ] THEN la collection Qdrant est supprimée ET le dossier `themes/animaux-zoologie/` est purgé de MinIO.
 
 ---
 
-## [PBI-056] [ADMIN] Gestionnaire de Thèmes Hybride & Multi-Upload
-**Priorité** : Haute | **Estimation** : M
+## 🔬 VOLET 2 : FIABILITÉ SCIENTIFIQUE (RAGAS)
 
-**User Story** : "En tant qu'Administrateur, je veux pouvoir sélectionner un thème existant ou en créer un nouveau lors de l'upload d'un ou plusieurs PDF, afin de classer mes documents sans friction technique."
-**Spécifications UX** : Combo-box (Select+Input), Radius 8px, Bleu #2563EB.
+### [PBI-076] Restauration de la Context Precision (Gold Standard)
+**Priorité** : Critique | **Estimation** : M
+**User Story** : "En tant qu'Administrateur, je veux utiliser le fichier `ground_truth.json` pour calculer une précision réelle, afin de ne plus avoir de valeurs 'NaN' dans mes rapports."
 **Critères d'Acceptation** :
-- [ ] Sélection/Saisie hybride via `cl.ChatSettings`.
-- [ ] Ingestion Batch utilisant `SimpleDirectoryReader(fs=s3fs)` vers MinIO.
+- [ ] Branchement du script d'audit sur `data/ground_truth.json`.
+- [ ] Affichage de la métrique "Context Precision" dans le Cockpit Streamlit.
+- [ ] Export automatique de tous les scores Ragas vers Arize Phoenix.
 
 ---
 
-## [PBI-057] [ADMIN] Ingestion thématique à la demande (theses.fr)
-**Priorité** : Haute | **Estimation** : M
+## 📖 VOLET 3 : EXPÉRIENCE ADMIN & PÉDAGOGIE
 
-**User Story** : "En tant qu'Administrateur, je veux déclencher l'ingestion d'un nouveau domaine depuis theses.fr via mot-clé, afin d'étendre rapidement la base RAG."
+### [PBI-075] Guide des Metrics & Aide à la Décision
+**Priorité** : Moyenne | **Estimation** : XS
+**User Story** : "En tant qu'Administrateur, je veux comprendre chaque score et savoir comment réagir, afin de piloter la qualité de mon RAG de manière experte."
 **Critères d'Acceptation** :
-- [ ] Ingestion du Top 10 via `IngestionPipeline` + `TitleExtractor`.
-- [ ] Feedback temps réel via `cl.TaskList`.
+- [ ] Ajout d'une section "Aide" dans le Dashboard Qualité.
+- [ ] Dictionnaire des metrics (Fidélité, Pertinence, Précision) avec seuils d'alerte et solutions.
 
----
-
-## [PBI-058] [ADMIN] Auto-Audit Qualité Post-Ingestion
+### [PBI-077] Sourcing Check (Prévisualisation theses.fr)
 **Priorité** : Moyenne | **Estimation** : S
-
-**User Story** : "En tant qu'Administrateur, je veux un mini-audit automatique après chaque ajout de données pour vérifier la fidélité immédiate du RAG."
+**User Story** : "En tant qu'Administrateur, je veux voir la liste des thèses trouvées avant de lancer l'ingestion, afin d'éviter d'indexer des documents hors-sujet."
 **Critères d'Acceptation** :
-- [ ] Génération de 3 questions flash via `RagDatasetGenerator`.
-- [ ] Affichage du score de Faithfulness dans l'UI Admin.
+- [ ] Affichage d'un tableau récapitulatif (Titres/Années) après la recherche theses.fr.
+- [ ] Bouton de confirmation pour déclencher l'ingestion effective.
 
----
-
-## [PBI-062] [ADMIN] Gouvernance Totale : Cycle de Vie & Souveraineté
-**Priorité** : Haute | **Estimation** : M
-
-**User Story** : "En tant qu'Administrateur, je veux pouvoir supprimer des thèmes et ré-indexer des données depuis MinIO, afin d'assurer la maintenance et l'évolution de ma base de connaissances."
+### [PBI-078] Visualisation du Flux (Architecture View)
+**Priorité** : Moyenne | **Estimation** : XS
+**User Story** : "En tant qu'Administrateur, je veux visualiser le schéma technique du pipeline dans le Cockpit, afin de comprendre l'enchaînement des étapes (parsing, métadonnées locales, génération)."
 **Critères d'Acceptation** :
-- [ ] **Delete** : Bouton de suppression de collection Qdrant avec purge optionnelle des fichiers MinIO.
-- [ ] **Re-Sync** : Fonction "Re-synchroniser" qui reconstruit l'index vectoriel à partir des PDF stockés dans MinIO pour un thème donné.
-- [ ] **Health Pulse** : Indicateur visuel (pastille) de l'état de santé live de Qdrant, MinIO et Phoenix.
+- [ ] Nouvel onglet "Architecture" dans le Cockpit Streamlit.
+- [ ] Schéma Mermaid ou SVG détaillant :
+    - PDF -> Docling (Local) -> Markdown.
+    - Markdown -> SLM Metadata (Local) -> Metadata.
+    - Text+Metadata -> Embedding (Local) -> Qdrant.
+    - Question -> GPT-4o (Cloud) -> Réponse.
 
 ---
 
-## 🏛️ JOURNAL DES DÉCISIONS (Sprint 20)
-- **DÉCISION 20.1** : Limite Top 10 pour le scraping automatisé.
-- **DÉCISION 20.2** : Dédoublonnage SHA-256 systématique.
-- **DÉCISION 20.3** : Volume persistant obligatoire pour Arize Phoenix.
-- **DÉCISION 20.4** : Application des tokens UX (Bleu #2563EB, Radius 8px) via Custom CSS dans Chainlit.
+## 🏛️ JOURNAL DES DÉCISIONS (Sprint 21)
+- **DÉCISION 21.1** : Abandon du dossier central unique `pdfs/` au profit d'une structure thématique `themes/{nom}/docs/` pour satisfaire le besoin de lisibilité de l'utilisateur.
+- **DÉCISION 21.2** : Utilisation du fichier `ground_truth.json` comme benchmark de référence (Gold Standard) pour stabiliser les mesures de précision.
 
 ---
-**PLANNING VALIDÉ - EN COURS D'EXÉCUTION**
+**"PLANNING VALIDÉ. À TOI LEAD-DEV."**

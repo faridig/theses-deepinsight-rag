@@ -177,9 +177,18 @@ class ThesesClient:
                 # Calculate SHA-256 Hash (PBI-028)
                 file_hash = hashlib.sha256(response.content).hexdigest()
                 
+                target_theme = theme or "unsorted"
                 if self.fs and self.bucket:
-                    # Storage path based on Hash (PBI-028)
-                    file_path = f"{self.bucket}/pdfs/{file_hash}.pdf"
+                    # New Storage path (PBI-072: Reorganisation Thématique Physique)
+                    file_path = f"{self.bucket}/themes/{target_theme}/docs/{thesis_id}.pdf"
+                    
+                    # Ensure directory exists
+                    docs_dir = f"{self.bucket}/themes/{target_theme}/docs"
+                    if not self.fs.exists(docs_dir):
+                        try:
+                            self.fs.makedirs(docs_dir)
+                        except Exception:
+                            pass # Might already exist
                     
                     # Dedup: check if exists
                     if not self.fs.exists(file_path):
@@ -187,31 +196,30 @@ class ThesesClient:
                             f.write(response.content)
                         logger.info(f"Successfully downloaded PDF for {thesis_id} to {file_path}")
                     else:
-                        logger.info(f"PDF already exists for {thesis_id} (hash: {file_hash}). Skipping upload.")
+                        logger.info(f"PDF already exists for {thesis_id} at {file_path}. Skipping upload.")
                     
-                    # Store a reference for the theme (for orchestration)
-                    if theme:
-                        ref_path = f"{self.bucket}/themes/{theme}/{thesis_id}.ref"
-                        if not self.fs.exists(ref_path):
-                            with self.fs.open(ref_path, "w") as f:
-                                f.write(file_hash)
+                    # Store a reference for the hash (PBI-028)
+                    ref_path = f"{self.bucket}/themes/{target_theme}/{thesis_id}.ref"
+                    if not self.fs.exists(ref_path):
+                        with self.fs.open(ref_path, "w") as f:
+                            f.write(file_hash)
                 else:
-                    # Local storage with Hash (PBI-028)
-                    pdf_dir = Path(self.data_dir) / "pdfs"
+                    # Local storage with thematic reorganization (PBI-072)
+                    pdf_dir = Path(self.data_dir) / "themes" / target_theme / "docs"
                     pdf_dir.mkdir(parents=True, exist_ok=True)
-                    file_path = str(pdf_dir / f"{file_hash}.pdf")
+                    file_path = str(pdf_dir / f"{thesis_id}.pdf")
                     
                     if not os.path.exists(file_path):
                         with open(file_path, "wb") as f:
                             f.write(response.content)
                         logger.info(f"Successfully downloaded PDF for {thesis_id} to {file_path}")
                     else:
-                        logger.info(f"PDF already exists (hash: {file_hash}).")
+                        logger.info(f"PDF already exists at {file_path}.")
 
-                    if theme:
-                        ref_dir = Path(self.data_dir) / "themes" / theme
-                        ref_dir.mkdir(parents=True, exist_ok=True)
-                        ref_path = str(ref_dir / f"{thesis_id}.ref")
+                    ref_dir = Path(self.data_dir) / "themes" / target_theme
+                    ref_dir.mkdir(parents=True, exist_ok=True)
+                    ref_path = str(ref_dir / f"{thesis_id}.ref")
+                    if not os.path.exists(ref_path):
                         with open(ref_path, "w") as f:
                             f.write(file_hash)
                 
