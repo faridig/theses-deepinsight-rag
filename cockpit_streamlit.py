@@ -117,15 +117,26 @@ def run_async_task(cmd, success_message):
     except Exception as e:
         st.error(f"❌ Erreur lors du lancement : {e}")
 
-def st_mermaid(code: str, height: int = 600):
+def st_mermaid(code: str, height: int = 850):
     """Rendu d'un diagramme Mermaid dans Streamlit (PBI-078)."""
     html_code = f"""
-    <div class="mermaid">
+    <div class="mermaid" style="display: flex; justify-content: center; align-items: flex-start;">
         {code}
     </div>
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({{ startOnLoad: true }});
+        mermaid.initialize({{ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {{
+                'primaryColor': '#2563EB',
+                'primaryTextColor': '#ffffff',
+                'primaryBorderColor': '#1D4ED8',
+                'lineColor': '#2563EB',
+                'secondaryColor': '#007bff',
+                'tertiaryColor': '#ffffff'
+            }}
+        }});
     </script>
     """
     components.html(html_code, height=height)
