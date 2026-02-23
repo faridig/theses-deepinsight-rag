@@ -172,6 +172,7 @@ async def orchestrate_s3_ingestion(storage_path: str = "./storage/qdrant", targe
             for item_path in items:
                 if item_path.lower().endswith(".ref"):
                     # Nouvelle structure (PBI-072) : le PDF est dans le sous-dossier /docs/
+                    thesis_id = os.path.basename(item_path).replace(".ref", "")
                     pdf_path = f"{bucket}/themes/{theme_slug}/docs/{thesis_id}.pdf"
                     
                     # Fallback au cas où le PDF n'a pas encore été migré

@@ -1,17 +1,13 @@
 import os
 import sys
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
+import logging
+from datetime import datetime
 import subprocess
 import time
 import hashlib
-import logging
-from datetime import datetime
-
-# Configuration des logs
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -21,6 +17,10 @@ from src.ingestion.theses_client import ThesesClient
 from src.indexing.vector_service import VectorService
 from src.config import normalize_theme
 from scripts.admin_cockpit import get_latest_audit_metrics
+
+# Configuration des logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Page Config
 st.set_page_config(

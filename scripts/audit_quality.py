@@ -155,7 +155,7 @@ def run_audit(dataset_path=None, collection=None):
         # 5. Rapport & Phoenix Export (PBI-076)
         try:
             # On tente d'envoyer les résultats à Phoenix s'il est disponible
-            client_px = px.Client(endpoint="http://localhost:6006")
+            px.Client(endpoint="http://localhost:6006")
             logger.info("Exportation des scores vers Arize Phoenix...")
             # Note: Phoenix capture déjà les traces de l'audit via l'instrumentation globale dans src/config.py
         except Exception:
