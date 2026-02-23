@@ -68,7 +68,8 @@ async def test_s3_download_mock(s3_config):
         result = client.download_pdf(test_id, test_url, theme="test-theme")
         path = result["path"]
         
-        assert path == f"{s3_config['bucket']}/pdfs/{expected_hash}.pdf"
+        # New directory structure: themes/{theme}/docs/{id}.pdf
+        assert path == f"{s3_config['bucket']}/themes/test-theme/docs/{test_id}.pdf"
         assert client.fs.exists(path)
         
         # Vérification du fichier de référence (PBI-028)
@@ -81,3 +82,10 @@ async def test_s3_download_mock(s3_config):
         # Cleanup
         client.fs.rm(path)
         client.fs.rm(ref_path)
+        
+        # Cleanup empty directories if needed
+        try:
+            client.fs.rm(f"{s3_config['bucket']}/themes/test-theme/docs", recursive=True)
+            client.fs.rm(f"{s3_config['bucket']}/themes/test-theme", recursive=True)
+        except Exception:
+            pass

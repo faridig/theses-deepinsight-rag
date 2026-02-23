@@ -1,5 +1,18 @@
 # Changelog - Theses-DeepInsight RAG
 
+## [1.12.0] - 2026-02-23
+### Ajouté
+- **Sprint 21 : Clean Slate & Gold Standard (PBI-071, 072, 073, 075, 076, 077, 078)**
+    - **PBI-071 & 072** : Grand nettoyage S3 et réorganisation thématique physique. Les documents sont désormais rangés dans `themes/{slug}/docs/`.
+    - **PBI-073** : Purge atomique synchronisée. La suppression d'une collection dans le Cockpit entraîne la suppression physique des fichiers sur MinIO et des caches locaux.
+    - **PBI-076** : Restauration de la métrique "Context Precision" via le Gold Standard (`data/ground_truth.json`).
+    - **PBI-075, 077, 078** : Améliorations UX Admin (Vue Architecture, Guide des Metrics, Sourcing Check enrichi).
+
+## 💡 LEÇONS APPRISES
+- **Idempotence Technique** : La normalisation des thèmes doit être robuste aux préfixes techniques (ex: `theses-`). L'implémentation d'une fonction `normalize_theme` idempotente évite les collisions et les erreurs de chemins dans les systèmes distribués (Qdrant + S3).
+- **Intégrité de la Purge** : Pour garantir un système "propre", la suppression logique (base de données) doit toujours être couplée à une suppression physique (stockage d'objets) et technique (cache applicatif).
+- **Stabilité des Métriques** : L'utilisation d'un référentiel de vérité (Ground Truth) fixe est la seule méthode fiable pour stabiliser des mesures de précision (Context Precision) et éviter les valeurs 'NaN' induites par des données synthétiques trop volatiles.
+
 ## [1.11.0] - 2026-02-23
 ### Ajouté
 - **Sprint 20 : Cockpit Control Plane & Silence UX (PBI-070)**

@@ -300,31 +300,35 @@ elif menu == "📥 Ingestion":
                 for uploaded_file in uploaded_files:
                     file_bytes = uploaded_file.getvalue()
                     file_hash = hashlib.sha256(file_bytes).hexdigest()
+                    thesis_id = uploaded_file.name.replace(".pdf", "")
                     
-                    # 1. Sauvegarde du PDF (Dédoublonnage Hash)
+                    # 1. Sauvegarde du PDF (Nouvelle Structure Thématique PBI-072)
                     if client.fs and client.bucket:
-                        pdf_path = f"{client.bucket}/pdfs/{file_hash}.pdf"
+                        pdf_path = f"{client.bucket}/themes/{slug_theme}/docs/{uploaded_file.name}"
                         if not client.fs.exists(pdf_path):
+                            client.fs.makedirs(os.path.dirname(pdf_path), exist_ok=True)
                             with client.fs.open(pdf_path, "wb") as f:
                                 f.write(file_bytes)
                         
-                        # 2. Sauvegarde de la référence thématique
-                        ref_path = f"{client.bucket}/themes/{slug_theme}/{uploaded_file.name}.ref"
+                        # 2. Sauvegarde de la référence thématique (Hash)
+                        ref_path = f"{client.bucket}/themes/{slug_theme}/{thesis_id}.ref"
                         if not client.fs.exists(ref_path):
                             client.fs.makedirs(os.path.dirname(ref_path), exist_ok=True)
                             with client.fs.open(ref_path, "w") as f:
                                 f.write(file_hash)
                     else:
-                        # Fallback Local
-                        local_pdf_path = os.path.join("data/pdfs", f"{file_hash}.pdf")
-                        os.makedirs("data/pdfs", exist_ok=True)
+                        # Fallback Local (Nouvelle Structure PBI-072)
+                        local_pdf_dir = os.path.join("data", "themes", slug_theme, "docs")
+                        os.makedirs(local_pdf_dir, exist_ok=True)
+                        local_pdf_path = os.path.join(local_pdf_dir, uploaded_file.name)
+                        
                         if not os.path.exists(local_pdf_path):
                             with open(local_pdf_path, "wb") as f:
                                 f.write(file_bytes)
                         
-                        ref_dir = os.path.join("data/themes", slug_theme)
+                        ref_dir = os.path.join("data", "themes", slug_theme)
                         os.makedirs(ref_dir, exist_ok=True)
-                        with open(os.path.join(ref_dir, f"{uploaded_file.name}.ref"), "w") as f:
+                        with open(os.path.join(ref_dir, f"{thesis_id}.ref"), "w") as f:
                             f.write(file_hash)
                             
                     count += 1
