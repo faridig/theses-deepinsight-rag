@@ -366,8 +366,12 @@ elif menu == "⚙️ Gouvernance":
             st.warning(f"⚠️ Êtes-vous sûr de vouloir supprimer définitivement la collection `{selected_theme}` ?")
             if st.button("✅ Oui, confirmer la suppression"):
                 try:
+                    # 🔍 Extraction du slug canonique (PBI-073 Correction)
+                    # selected_theme contient déjà le préfixe 'theses-' (ex: 'theses-ia')
+                    collection_name = selected_theme
+                    slug = normalize_theme(selected_theme)
+                    
                     # Suppression Qdrant
-                    collection_name = f"theses-{selected_theme}"
                     vs = VectorService(collection_name=collection_name)
                     vs.client.delete_collection(collection_name=collection_name)
                     
@@ -376,33 +380,42 @@ elif menu == "⚙️ Gouvernance":
                         from src.ingestion.theses_client import ThesesClient
                         client = ThesesClient()
                         if client.fs and client.bucket:
-                            # Suppression du dossier thématique sur MinIO
-                            theme_path = f"{client.bucket}/themes/{selected_theme}"
+                            # Suppression du dossier thématique sur MinIO (via le slug canonique)
+                            theme_path = f"{client.bucket}/themes/{slug}"
                             if client.fs.exists(theme_path):
                                 client.fs.rm(theme_path, recursive=True)
-                                logger.info(f"S3 folder {theme_path} deleted for theme {selected_theme}")
+                                logger.info(f"S3 folder {theme_path} deleted for theme {slug}")
                             
-                            # Fallback : suppression de l'ancien dossier à la racine (Legacy)
-                            legacy_path = f"{client.bucket}/{selected_theme}"
+                            # Fallback : suppression de l'ancien dossier (ex: sans prefixe themes/)
+                            legacy_path = f"{client.bucket}/{slug}"
                             if client.fs.exists(legacy_path):
                                 client.fs.rm(legacy_path, recursive=True)
+                                
+                            # Fallback 2 : au cas où le dossier S3 utilisait le nom brut du thème
+                            raw_slug = selected_theme.replace("theses-", "")
+                            if raw_slug != slug:
+                                raw_path = f"{client.bucket}/themes/{raw_slug}"
+                                if client.fs.exists(raw_path):
+                                    client.fs.rm(raw_path, recursive=True)
                         
                         # Nettoyage local aussi (PBI-073 Bonus)
-                        local_theme_path = os.path.join("data", "themes", selected_theme)
-                        if os.path.exists(local_theme_path):
-                            import shutil
-                            shutil.rmtree(local_theme_path)
-                            
-                        local_cache_path = os.path.join("storage", "cache", selected_theme)
-                        if os.path.exists(local_cache_path):
-                            import shutil
-                            shutil.rmtree(local_cache_path)
+                        local_paths = [
+                            os.path.join("data", "themes", slug),
+                            os.path.join("storage", "cache", slug),
+                            os.path.join("data", "themes", selected_theme.replace("theses-", "")),
+                            os.path.join("storage", "cache", selected_theme.replace("theses-", ""))
+                        ]
+                        import shutil
+                        for p in local_paths:
+                            if os.path.exists(p):
+                                shutil.rmtree(p)
+                                logger.info(f"Local path {p} deleted")
                             
                     except Exception as purge_err:
                         logger.error(f"Erreur lors de la purge physique : {purge_err}")
                         st.warning(f"Collection supprimée mais échec de la purge physique : {purge_err}")
                     
-                    st.success(f"Collection `{collection_name}` et ressources associées supprimées.")
+                    st.success(f"Collection `{collection_name}` et ressources associées (slug: {slug}) supprimées.")
                     del st.session_state.confirm_delete
                     time.sleep(1)
                     st.rerun()

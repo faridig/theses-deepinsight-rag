@@ -89,8 +89,14 @@ CANONICAL_THEMES = {
 def normalize_theme(theme_name: str) -> str:
     """
     Retourne le nom canonique d'un thème ou un slug standardisé.
+    Idempotent vis-à-vis du préfixe 'theses-' (PBI-073 Correction).
     """
     raw_name = theme_name.lower().strip()
+    
+    # Suppression du préfixe technique si présent
+    if raw_name.startswith("theses-"):
+        raw_name = raw_name.replace("theses-", "", 1)
+        
     # 1. Vérifier si c'est un alias connu
     if raw_name in CANONICAL_THEMES:
         return CANONICAL_THEMES[raw_name]
