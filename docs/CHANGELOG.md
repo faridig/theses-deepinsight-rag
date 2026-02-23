@@ -1,21 +1,5 @@
 # Changelog - Theses-DeepInsight RAG
 
-## [1.12.0] - 2026-02-23
-### Ajouté
-- **Sprint 21 : Clean Slate & Gold Standard (PBI-071 à PBI-078)**
-    - Restauration de la métrique **Context Precision** via l'intégration d'un référentiel de vérité Gold Standard (`ground_truth.json`).
-    - Implémentation de la **Purge Synchronisée** : suppression atomique des ressources (Qdrant, MinIO, Cache local) lors de la suppression d'une collection.
-    - Réorganisation physique thématique sur MinIO (`theses-data/themes/{theme}/docs/`).
-    - Ajout d'un **Sourcing Check** interactif : prévisualisation des résultats theses.fr avec confirmation avant ingestion massive.
-    - Déploiement d'un **Guide des Metrics** avec aide à la décision pour l'interprétation des scores Ragas.
-    - Visualisation interactive du flux technique (Mermaid Architecture View) dans le cockpit.
-
-## 💡 LEÇONS APPRISES
-- **Intégrité Physique vs Logique** : La synchronisation entre l'index vectoriel et le stockage physique (S3) est indispensable pour maintenir un environnement sain. Une purge qui ne traite pas les deux côtés crée des "collections fantômes" qui polluent l'expérience d'administration.
-- **Fiabilité du Benchmark (Gold Standard)** : L'utilisation de données de vérité (`ground_truth.json`) au lieu de questions purement synthétiques est le seul moyen d'obtenir une mesure de "Context Precision" stable et exploitable pour le fine-tuning.
-- **Pédagogie de l'Audit** : Les scores techniques (Fidélité, Précision) sont inutiles sans contexte. L'intégration de seuils d'alerte et de solutions correctives directement dans l'interface transforme l'audit en un véritable outil de pilotage expert.
-- **Visualisation de l'Architecture** : L'exposition claire du pipeline (diagramme Mermaid) facilite le debug et la montée en compétence des nouveaux administrateurs sur la complexité du RAG (parsing local, enrichment SLM, hybride cloud).
-
 ## [1.11.0] - 2026-02-23
 ### Ajouté
 - **Sprint 20 : Cockpit Control Plane & Silence UX (PBI-070)**
