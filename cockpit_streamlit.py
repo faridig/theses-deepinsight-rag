@@ -8,6 +8,7 @@ import hashlib
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -115,6 +116,19 @@ def run_async_task(cmd, success_message):
         st.info("La tâche s'exécute en arrière-plan.")
     except Exception as e:
         st.error(f"❌ Erreur lors du lancement : {e}")
+
+def st_mermaid(code: str, height: int = 600):
+    """Rendu d'un diagramme Mermaid dans Streamlit (PBI-078)."""
+    html_code = f"""
+    <div class="mermaid">
+        {code}
+    </div>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({{ startOnLoad: true }});
+    </script>
+    """
+    components.html(html_code, height=height)
 
 # --- Pages ---
 
@@ -467,41 +481,39 @@ elif menu == "📈 Statistiques":
 elif menu == "🏗️ Architecture":
     st.header("Schéma Technique du Pipeline")
     
-    st.markdown("""
-    ### 🔄 Flux de Données (Theses-DeepInsight)
+    st.markdown("### 🔄 Flux de Données (Theses-DeepInsight)")
+    st.write("Le schéma ci-dessous détaille l'enchaînement des étapes, du document brut à la génération de la réponse.")
     
-    Le schéma ci-dessous détaille l'enchaînement des étapes, du document brut à la génération de la réponse.
+    mermaid_code = """
+graph TD
+    subgraph "Phase d'Ingestion (Locale)"
+        PDF[📄 PDF Thèse] -->|Parsing| DL(🛠️ Docling)
+        DL -->|Markdown| MD[📝 Texte Markdown]
+        MD -->|Extraction| SLM(🧠 SLM Metadata)
+        SLM -->|Enrichissement| META[🏷️ Métadonnées]
+    end
     
-    ```mermaid
-    graph TD
-        subgraph "Phase d'Ingestion (Locale)"
-            PDF[📄 PDF Thèse] -->|Parsing| DL(🛠️ Docling)
-            DL -->|Markdown| MD[📝 Texte Markdown]
-            MD -->|Extraction| SLM(🧠 SLM Metadata)
-            SLM -->|Enrichissement| META[🏷️ Métadonnées]
-        end
-        
-        subgraph "Phase d'Indexation (S3 & Vector)"
-            MD -->|Stockage| S3(🪣 MinIO S3)
-            META -->|Embedding| EMB(🔢 text-embedding-3)
-            EMB -->|Vecteurs| QDR(🔍 Qdrant)
-        end
-        
-        subgraph "Phase de Génération (Hybrid)"
-            User[❓ Question Utilisateur] -->|Search| QDR
-            QDR -->|Context| RAG(⚙️ RAG Engine)
-            RAG -->|Prompt| LLM(🤖 GPT-4o-mini)
-            LLM -->|Réponse| Final[✅ Réponse Finale]
-        end
-        
-        style PDF fill:#f9f,stroke:#333,stroke-width:2px
-        style S3 fill:#69f,stroke:#333,stroke-width:2px
-        style QDR fill:#6f9,stroke:#333,stroke-width:2px
-        style LLM fill:#f96,stroke:#333,stroke-width:2px
-    ```
+    subgraph "Phase d'Indexation (S3 & Vector)"
+        MD -->|Stockage| S3(🪣 MinIO S3)
+        META -->|Embedding| EMB(🔢 text-embedding-3)
+        EMB -->|Vecteurs| QDR(🔍 Qdrant)
+    end
     
-    *Note : Les étapes de Parsing et d'Extraction de métadonnées sont réalisées localement pour garantir la confidentialité et réduire les coûts.*
-    """)
+    subgraph "Phase de Génération (Hybrid)"
+        User[❓ Question Utilisateur] -->|Search| QDR
+        QDR -->|Context| RAG(⚙️ RAG Engine)
+        RAG -->|Prompt| LLM(🤖 GPT-4o-mini)
+        LLM -->|Réponse| Final[✅ Réponse Finale]
+    end
+    
+    style PDF fill:#f9f,stroke:#333,stroke-width:2px
+    style S3 fill:#69f,stroke:#333,stroke-width:2px
+    style QDR fill:#6f9,stroke:#333,stroke-width:2px
+    style LLM fill:#f96,stroke:#333,stroke-width:2px
+"""
+    st_mermaid(mermaid_code, height=600)
+    
+    st.info("💡 Les étapes de Parsing et d'Extraction de métadonnées sont réalisées localement pour garantir la confidentialité et réduire les coûts.")
     
     st.divider()
     st.subheader("🛠️ Stack Technique")
