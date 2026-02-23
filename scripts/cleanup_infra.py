@@ -3,7 +3,7 @@ import shutil
 import logging
 from qdrant_client import QdrantClient
 from src.ingestion.theses_client import ThesesClient
-from src.config import CANONICAL_THEMES, setup_settings
+from src.config import setup_settings
 
 # Silence technique (PBI-027)
 logging.getLogger("httpx").setLevel(logging.WARNING)
