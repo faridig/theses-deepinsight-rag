@@ -1,122 +1,155 @@
 import os
+import sys
 import shutil
 import logging
+
+# Configuration du path pour permettre l'exécution native (Guidance Lead-Dev)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from qdrant_client import QdrantClient
 from src.ingestion.theses_client import ThesesClient
-from src.config import CANONICAL_THEMES
+from src.config import setup_settings, CANONICAL_THEMES
 
-# Silence technique (PBI-027)
+# Silence technique
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cleanup_infra")
 
 def cleanup():
     """
-    Supprime les buckets MinIO orphelins, les collections Qdrant non autorisées
-    et vide les dossiers temporaires/venv non standards (PBI-026).
+    Grand Nettoyage de l'infrastructure (Sprint 21 - PBI-071, 072, 073).
+    Assure l'intégrité par la suppression des alias non-canoniques (ex: theses-ia).
     """
+    setup_settings()
     client = ThesesClient()
     
-    # 1. Liste Blanche Canonique (PBI-026/Review)
-    # On génère la liste des thèmes autorisés à partir des thèmes canoniques uniquement (PBI-026 Review Fix)
-    allowed_themes = set(CANONICAL_THEMES.values())
+    # Construction dynamique de la liste blanche (Guidance Lead-Dev)
+    # On ne garde QUE les noms de thèmes canoniques
+    canonical_slugs = set(CANONICAL_THEMES.values())
+    allowed_collections = [f"theses-{slug}" for slug in canonical_slugs]
+    allowed_collections.append("theses-default")
     
-    # Construction de la liste blanche des buckets autorisés
-    # On ne met QUE les thèmes canoniques, theses-data et quarantine.
-    # theses-agri sera donc supprimé au profit de theses-agriculture.
-    allowed_buckets = {"theses-data", "quarantine"}
-    if client.bucket:
-        allowed_buckets.add(client.bucket.strip("/"))
+    logger.info(f"Collections autorisées (canoniques) : {allowed_collections}")
     
-    for t in allowed_themes:
-        allowed_buckets.add(f"theses-{t}")
-    
-    logger.info(f"Liste blanche des ressources : {allowed_buckets}")
-    
-    # 2. Cleanup MinIO buckets
+    # 1. PBI-071: Nettoyage des Buckets MinIO
     if client.fs:
         try:
-            logger.info("Scanning MinIO buckets...")
-            # On liste la racine du stockage S3
+            logger.info("--- PBI-071: Scanning MinIO buckets ---")
             buckets = client.fs.ls("", detail=False)
-            for bucket_path in buckets:
-                bucket_name = bucket_path.strip("/")
-                if bucket_name and bucket_name not in allowed_buckets:
-                    logger.info(f"Suppression du bucket orphelin ou non-canonique : {bucket_name}")
+            target_bucket = os.getenv("MINIO_BUCKET", "theses-data")
+            
+            for b_path in buckets:
+                b_name = b_path.strip("/")
+                # On garde le bucket principal et reports
+                if b_name != target_bucket and b_name != "reports":
+                    logger.info(f"Suppression du bucket orphelin : {b_name}")
                     try:
-                        client.fs.rm(bucket_path, recursive=True)
-                    except Exception as rm_err:
-                        logger.error(f"Impossible de supprimer {bucket_name}: {rm_err}")
+                        client.fs.rm(b_path, recursive=True)
+                    except Exception as e:
+                        logger.error(f"Erreur lors de la suppression du bucket {b_name}: {e}")
                 else:
-                    logger.info(f"Bucket conservé : {bucket_name}")
+                    logger.info(f"Bucket conservé : {b_name}")
+            
+            # PBI-071: Nettoyage de la racine du bucket
+            logger.info(f"--- PBI-071: Nettoyage racine de {target_bucket} ---")
+            root_items = client.fs.ls(target_bucket, detail=False)
+            for item in root_items:
+                item_name = os.path.basename(item)
+                if item_name == "themes":
+                    continue
+                
+                # Migration PDF orphelin
+                if item.lower().endswith(".pdf"):
+                    target_path = f"{target_bucket}/themes/unsorted/docs/{item_name}"
+                    logger.info(f"Migration PDF orphelin {item} -> {target_path}")
+                    client.fs.makedirs(f"{target_bucket}/themes/unsorted/docs", exist_ok=True)
+                    client.fs.mv(item, target_path)
+                
+                # Suppression dossier agriculture orphelin à la racine (legacy)
+                elif item_name == "agriculture":
+                    logger.info(f"Suppression dossier 'agriculture' orphelin à la racine de {target_bucket}")
+                    client.fs.rm(item, recursive=True)
+                
+                # Autres orphelins (sauf dossiers structurés)
+                elif item_name not in ["themes", "quarantine", "reports"]:
+                    logger.info(f"Suppression item orphelin S3 : {item}")
+                    try:
+                        client.fs.rm(item, recursive=True)
+                    except Exception:
+                        pass
+                    
         except Exception as e:
-            logger.error(f"Erreur lors du nettoyage MinIO : {e}")
+            logger.error(f"Erreur durant le nettoyage MinIO : {e}")
     else:
-        logger.warning("MinIO non configuré, saut du nettoyage des buckets.")
+        logger.warning("MinIO non configuré, saut du nettoyage S3.")
 
-    # 3. Cleanup Qdrant Collections (Review Fix)
-    # On définit explicitement les collections autorisées (celles qui commencent par theses- dans la liste blanche)
-    allowed_collections = [b for b in allowed_buckets if b.startswith("theses-")]
-    
+    # 2. Cleanup Qdrant Collections (Intégrité & Dynamisme)
     try:
         qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
-        storage_path = "./storage/qdrant"
+        q_client = QdrantClient(url=qdrant_url)
         
-        # On essaie d'abord via l'URL (Remote) puis en local
-        q_client = None
-        try:
-            q_client = QdrantClient(url=qdrant_url)
-            # Test de connexion simple
-            q_client.get_collections()
-            logger.info(f"Connecté à Qdrant (Remote: {qdrant_url})")
-        except Exception:
-            if os.path.exists(storage_path):
-                q_client = QdrantClient(path=storage_path)
-                logger.info(f"Connecté à Qdrant (Local: {storage_path})")
-        
-        if q_client:
-            collections = q_client.get_collections().collections
-            for col in collections:
-                if col.name.startswith("theses-") and col.name not in allowed_collections:
-                    logger.info(f"Suppression de la collection Qdrant orpheline ou non-canonique : {col.name}")
-                    q_client.delete_collection(col.name)
-                else:
-                    logger.info(f"Collection Qdrant conservée : {col.name}")
-            q_client.close()
-        else:
-            logger.warning("Impossible de contacter Qdrant pour le nettoyage.")
+        collections = q_client.get_collections().collections
+        for col in collections:
+            # Suppression si :
+            # - C'est une collection de test
+            # - Ou si c'est une collection theses- qui n'est pas canonique (ex: theses-ia)
+            is_test = any(x in col.name.lower() for x in ["test", "tmp", "persist"])
+            is_valid_thesis = col.name in allowed_collections
+            
+            if is_test or (col.name.startswith("theses-") and not is_valid_thesis):
+                logger.info(f"Suppression de la collection non-canonique ou technique : {col.name}")
+                q_client.delete_collection(col.name)
+            else:
+                logger.info(f"Collection Qdrant conservée : {col.name}")
+        q_client.close()
     except Exception as e:
         logger.error(f"Erreur lors du nettoyage Qdrant : {e}")
 
-    # 4. Cleanup local data directory
+    # 3. Cleanup local data directory (PBI-072)
     data_dir = "data"
     if os.path.exists(data_dir):
-        logger.info(f"Nettoyage du dossier local : {data_dir}")
+        logger.info("--- PBI-072: Nettoyage local ---")
+        # On supprime data/pdfs qui est obsolète
+        legacy_pdf_dir = os.path.join(data_dir, "pdfs")
+        if os.path.exists(legacy_pdf_dir):
+            logger.info("Suppression du dossier local obsolète data/pdfs/")
+            shutil.rmtree(legacy_pdf_dir)
+            
+        # On garde ground_truth.json et les thèmes structurés
         for item in os.listdir(data_dir):
             item_path = os.path.join(data_dir, item)
+            if item in ["ground_truth.json", "themes", "synthetic_dataset.json"]:
+                continue
+            
             try:
                 if os.path.isfile(item_path):
                     os.unlink(item_path)
-                    logger.info(f"Fichier supprimé : {item}")
+                    logger.info(f"Fichier local supprimé : {item}")
                 elif os.path.isdir(item_path):
                     shutil.rmtree(item_path)
-                    logger.info(f"Dossier supprimé : {item}")
+                    logger.info(f"Dossier local supprimé : {item}")
             except Exception as e:
                 logger.error(f"Erreur lors de la suppression de {item_path} : {e}")
-    else:
-        logger.info("Dossier data/ inexistant, rien à nettoyer.")
 
-    # 5. Cleanup venv non standards (Review Fix)
-    root_items = os.listdir(".")
-    for item in root_items:
-        if (item.startswith("venv") or item.startswith(".venv")) and item not in ["venv", ".venv"]:
-            logger.info(f"Suppression du venv non standard : {item}")
-            try:
-                shutil.rmtree(item)
-            except Exception as e:
-                logger.error(f"Erreur lors de la suppression de {item} : {e}")
-    
-    logger.info("Nettoyage de l'infrastructure terminé.")
+    # 4. Cleanup cache
+    cache_dir = "storage/cache"
+    if os.path.exists(cache_dir):
+        logger.info("Nettoyage du cache d'ingestion...")
+        # Liste des slugs autorisés pour le cache
+        valid_slugs = [t.replace("theses-", "") for t in allowed_collections]
+        for theme_cache in os.listdir(cache_dir):
+            if theme_cache not in valid_slugs:
+                path = os.path.join(cache_dir, theme_cache)
+                try:
+                    if os.path.isdir(path):
+                        shutil.rmtree(path)
+                    else:
+                        os.unlink(path)
+                    logger.info(f"Cache supprimé : {theme_cache}")
+                except Exception as e:
+                    logger.error(f"Erreur lors de la suppression du cache {path}: {e}")
+
+    logger.info("Nettoyage de l'infrastructure terminé avec succès.")
 
 if __name__ == "__main__":
     cleanup()

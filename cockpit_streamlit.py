@@ -1,12 +1,14 @@
 import os
 import sys
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
+import logging
+from datetime import datetime
 import subprocess
 import time
 import hashlib
-from datetime import datetime
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+import streamlit.components.v1 as components
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -16,6 +18,10 @@ from src.ingestion.theses_client import ThesesClient
 from src.indexing.vector_service import VectorService
 from src.config import normalize_theme
 from scripts.admin_cockpit import get_latest_audit_metrics
+
+# Configuration des logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Page Config
 st.set_page_config(
@@ -66,7 +72,7 @@ with st.sidebar:
     
     menu = st.radio(
         "Navigation",
-        ["📊 Dashboard", "📥 Ingestion", "⚙️ Gouvernance", "📈 Statistiques"]
+        ["📊 Dashboard", "📥 Ingestion", "⚙️ Gouvernance", "📈 Statistiques", "🏗️ Architecture"]
     )
     
     st.divider()
@@ -111,6 +117,35 @@ def run_async_task(cmd, success_message):
     except Exception as e:
         st.error(f"❌ Erreur lors du lancement : {e}")
 
+def st_mermaid(code: str, height: int = 1200):
+    """Rendu d'un diagramme Mermaid dans Streamlit (PBI-078)."""
+    html_code = f"""
+    <div class="mermaid" style="display: flex; justify-content: center; padding-top: 20px;">
+        {code}
+    </div>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({{ 
+            startOnLoad: true,
+            theme: 'base',
+            flowchart: {{ useMaxWidth: false }} ,
+            themeVariables: {{
+                'primaryColor': '#2563EB',
+                'primaryTextColor': '#ffffff',
+                'primaryBorderColor': '#1D4ED8',
+                'lineColor': '#2563EB',
+                'secondaryColor': '#007bff',
+                'tertiaryColor': '#ffffff',
+                'edgeLabelBackground':'#2563EB',
+                'edgeLabelTextColor':'#ffffff',
+                'fontFamily': 'Segoe UI, Arial',
+                'fontSize': '14px'
+            }}
+        }});
+    </script>
+    """
+    components.html(html_code, height=height, scrolling=True)
+
 # --- Pages ---
 
 if menu == "📊 Dashboard":
@@ -143,6 +178,7 @@ if menu == "📊 Dashboard":
         scores = audit_data["scores"]
         faithfulness = scores.get('faithfulness', 0.0)
         relevancy = scores.get('answer_relevancy', 0.0)
+        precision = scores.get('context_precision', 0.0) # PBI-076
         
         col1, col2 = st.columns([1, 2])
         
@@ -152,14 +188,31 @@ if menu == "📊 Dashboard":
                       delta=f"{faithfulness - 0.85:.2f}" if faithfulness >= 0.85 else f"{faithfulness - 0.85:.2f}",
                       delta_color="normal" if faithfulness >= 0.85 else "inverse")
             st.metric("Pertinence (Relevancy)", f"{relevancy:.2f}")
+            st.metric("Précision (Context Precision)", f"{precision:.2f}") # PBI-076
             
         with col2:
             fig = go.Figure(data=[
-                go.Bar(name='Metrics', x=['Fidélité', 'Pertinence'], y=[faithfulness, relevancy],
-                       marker_color=['#28a745' if faithfulness >= 0.85 else '#dc3545', '#007bff'])
+                go.Bar(name='Metrics', x=['Fidélité', 'Pertinence', 'Précision'], y=[faithfulness, relevancy, precision],
+                       marker_color=['#28a745' if faithfulness >= 0.85 else '#dc3545', '#007bff', '#ffc107'])
             ])
             fig.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20), yaxis_range=[0,1])
             st.plotly_chart(fig, use_container_width=True)
+            
+        # 📘 Guide des Metrics & Aide à la Décision (PBI-075)
+        with st.expander("📘 Guide des Metrics & Aide à la Décision"):
+            st.markdown("""
+            ### 🎯 Dictionnaire des Métriques
+            
+            | Métrique | Seuil d'Alerte | Signification | Solution si Score Faible |
+            | :--- | :---: | :--- | :--- |
+            | **Fidélité (Faithfulness)** | < 0.85 | La réponse contient des hallucinations (non basée sur les docs). | Vérifier le prompt de génération ou la température du LLM. |
+            | **Pertinence (Relevancy)** | < 0.80 | La réponse est floue ou ne répond pas directement à la question. | Améliorer le prompt ou augmenter le nombre d'extraits (`top_k`). |
+            | **Précision (Context Precision)** | < 0.70 | Les documents récupérés ne sont pas les plus pertinents pour la question. | Revoir l'Embedding, le découpage (chunking) ou ajouter du Reranking. |
+            
+            ### 🛠️ Actions Correctives
+            - **Score < 0.7** : Alerte critique. Le RAG est probablement inutilisable sur ce thème.
+            - **Baisse soudaine** : Vérifier l'intégrité des PDF (parsing corrompu ?) ou un changement d'API OpenAI.
+            """)
     else:
         st.warning("⚠️ Aucun audit trouvé dans `docs/AUDITS/`.")
         if st.button("🚀 Lancer un audit maintenant"):
@@ -228,9 +281,17 @@ elif menu == "📥 Ingestion":
         if last_params.get("theme") == theme_input and last_params.get("limit") == limit:
             st.success(f"✅ {len(search_results)} thèses trouvées pour '{theme_input}'")
             df_results = pd.DataFrame(search_results)
-            st.dataframe(df_results[["id", "titre", "auteurs", "university", "discipline"]], use_container_width=True)
+            # Ajout de l'année pour le Sourcing Check (PBI-077)
+            if "dateSoutenance" in df_results.columns:
+                df_results["Année"] = df_results["dateSoutenance"].astype(str).str[:4]
             
-            if st.button("📥 Démarrer l'ingestion massive", use_container_width=True, type="primary"):
+            display_cols = ["id", "titre", "auteurs", "Année", "university", "discipline"]
+            available_cols = [c for c in display_cols if c in df_results.columns]
+            
+            st.dataframe(df_results[available_cols], use_container_width=True)
+            
+            st.info("💡 Vérifiez la liste ci-dessus. Si les thèses correspondent à votre besoin, confirmez l'ingestion.")
+            if st.button("📥 Confirmer et Démarrer l'ingestion massive", use_container_width=True, type="primary"):
                 cmd = [sys.executable, "scripts/ingest_theme.py", "--theme", theme_input, "--limit", str(limit)]
                 run_async_task(cmd, f"Ingestion pour '{theme_input}' lancée.")
         else:
@@ -269,31 +330,35 @@ elif menu == "📥 Ingestion":
                 for uploaded_file in uploaded_files:
                     file_bytes = uploaded_file.getvalue()
                     file_hash = hashlib.sha256(file_bytes).hexdigest()
+                    thesis_id = uploaded_file.name.replace(".pdf", "")
                     
-                    # 1. Sauvegarde du PDF (Dédoublonnage Hash)
+                    # 1. Sauvegarde du PDF (Nouvelle Structure Thématique PBI-072)
                     if client.fs and client.bucket:
-                        pdf_path = f"{client.bucket}/pdfs/{file_hash}.pdf"
+                        pdf_path = f"{client.bucket}/themes/{slug_theme}/docs/{uploaded_file.name}"
                         if not client.fs.exists(pdf_path):
+                            client.fs.makedirs(os.path.dirname(pdf_path), exist_ok=True)
                             with client.fs.open(pdf_path, "wb") as f:
                                 f.write(file_bytes)
                         
-                        # 2. Sauvegarde de la référence thématique
-                        ref_path = f"{client.bucket}/themes/{slug_theme}/{uploaded_file.name}.ref"
+                        # 2. Sauvegarde de la référence thématique (Hash)
+                        ref_path = f"{client.bucket}/themes/{slug_theme}/{thesis_id}.ref"
                         if not client.fs.exists(ref_path):
                             client.fs.makedirs(os.path.dirname(ref_path), exist_ok=True)
                             with client.fs.open(ref_path, "w") as f:
                                 f.write(file_hash)
                     else:
-                        # Fallback Local
-                        local_pdf_path = os.path.join("data/pdfs", f"{file_hash}.pdf")
-                        os.makedirs("data/pdfs", exist_ok=True)
+                        # Fallback Local (Nouvelle Structure PBI-072)
+                        local_pdf_dir = os.path.join("data", "themes", slug_theme, "docs")
+                        os.makedirs(local_pdf_dir, exist_ok=True)
+                        local_pdf_path = os.path.join(local_pdf_dir, uploaded_file.name)
+                        
                         if not os.path.exists(local_pdf_path):
                             with open(local_pdf_path, "wb") as f:
                                 f.write(file_bytes)
                         
-                        ref_dir = os.path.join("data/themes", slug_theme)
+                        ref_dir = os.path.join("data", "themes", slug_theme)
                         os.makedirs(ref_dir, exist_ok=True)
-                        with open(os.path.join(ref_dir, f"{uploaded_file.name}.ref"), "w") as f:
+                        with open(os.path.join(ref_dir, f"{thesis_id}.ref"), "w") as f:
                             f.write(file_hash)
                             
                     count += 1
@@ -335,10 +400,56 @@ elif menu == "⚙️ Gouvernance":
             st.warning(f"⚠️ Êtes-vous sûr de vouloir supprimer définitivement la collection `{selected_theme}` ?")
             if st.button("✅ Oui, confirmer la suppression"):
                 try:
-                    collection_name = f"theses-{selected_theme}"
+                    # 🔍 Extraction du slug canonique (PBI-073 Correction)
+                    # selected_theme contient déjà le préfixe 'theses-' (ex: 'theses-ia')
+                    collection_name = selected_theme
+                    slug = normalize_theme(selected_theme)
+                    
+                    # Suppression Qdrant
                     vs = VectorService(collection_name=collection_name)
                     vs.client.delete_collection(collection_name=collection_name)
-                    st.success(f"Collection `{collection_name}` supprimée.")
+                    
+                    # 🗑️ Synchronisation Totale de la Purge (PBI-073)
+                    try:
+                        from src.ingestion.theses_client import ThesesClient
+                        client = ThesesClient()
+                        if client.fs and client.bucket:
+                            # Suppression du dossier thématique sur MinIO (via le slug canonique)
+                            theme_path = f"{client.bucket}/themes/{slug}"
+                            if client.fs.exists(theme_path):
+                                client.fs.rm(theme_path, recursive=True)
+                                logger.info(f"S3 folder {theme_path} deleted for theme {slug}")
+                            
+                            # Fallback : suppression de l'ancien dossier (ex: sans prefixe themes/)
+                            legacy_path = f"{client.bucket}/{slug}"
+                            if client.fs.exists(legacy_path):
+                                client.fs.rm(legacy_path, recursive=True)
+                                
+                            # Fallback 2 : au cas où le dossier S3 utilisait le nom brut du thème
+                            raw_slug = selected_theme.replace("theses-", "")
+                            if raw_slug != slug:
+                                raw_path = f"{client.bucket}/themes/{raw_slug}"
+                                if client.fs.exists(raw_path):
+                                    client.fs.rm(raw_path, recursive=True)
+                        
+                        # Nettoyage local aussi (PBI-073 Bonus)
+                        local_paths = [
+                            os.path.join("data", "themes", slug),
+                            os.path.join("storage", "cache", slug),
+                            os.path.join("data", "themes", selected_theme.replace("theses-", "")),
+                            os.path.join("storage", "cache", selected_theme.replace("theses-", ""))
+                        ]
+                        import shutil
+                        for p in local_paths:
+                            if os.path.exists(p):
+                                shutil.rmtree(p)
+                                logger.info(f"Local path {p} deleted")
+                            
+                    except Exception as purge_err:
+                        logger.error(f"Erreur lors de la purge physique : {purge_err}")
+                        st.warning(f"Collection supprimée mais échec de la purge physique : {purge_err}")
+                    
+                    st.success(f"Collection `{collection_name}` et ressources associées (slug: {slug}) supprimées.")
                     del st.session_state.confirm_delete
                     time.sleep(1)
                     st.rerun()
@@ -383,6 +494,95 @@ elif menu == "📈 Statistiques":
     else:
         st.info("Aucune donnée statistique disponible.")
         
+elif menu == "🏗️ Architecture":
+    st.header("Schéma Technique du Pipeline Exhaustif")
+    
+    st.markdown("### 🔄 Flux de Données Bout-en-Bout")
+    st.write("Visualisation détaillée des trois phases du pipeline : Ingestion, Indexation et Moteur RAG.")
+    
+    mermaid_code = """
+graph TD
+    subgraph "1. Ingestion"
+        RAW["📄 PDF"] -->|Docling GPU| MD["📝 Markdown"]
+        MD -->|SLM| META["🏷️ Métadonnées Enrichies"]
+        MD & META -->|Archivage| S3["🪣 MinIO S3"]
+    end
+
+    S3 -.-> EMB
+    META -.-> EMB
+    META -.-> BM25
+
+    subgraph "2. Indexation"
+        EMB["🔢 text-embedding-3"] -->|Vecteurs Int8| QDR["🔍 Qdrant"]
+        BM25["🗂️ BM25s"]
+    end
+
+    QDR -.-> V_RET
+    BM25 -.-> T_RET
+
+    subgraph "3. Moteur RAG"
+        User["👤 Utilisateur"] -->|Query Expansion| MQ["🔄 Multi-Query"]
+        MQ --> V_RET["🔍 Vector Search"] & T_RET["🔍 BM25"]
+        V_RET & T_RET -->|RRF Fusion| FUSION["⚖️ Fusion"]
+        FUSION --> W_SUB["🪟 Window Substitution"] --> RERANK["💎 Cohere Rerank v3"]
+        RERANK --> DIV["🎭 Diversity Filter"] --> LLM["🤖 GPT-4o-mini"]
+        LLM --> Final["✅ Réponse Sourcée"]
+    end
+
+    %% Styles pour contraste élevé (Texte foncé sur fond clair)
+    classDef ingestion fill:#fee2e2,stroke:#ef4444,stroke-width:2px,color:#991b1b;
+    classDef indexation fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#1e40af;
+    classDef rag fill:#dcfce7,stroke:#22c55e,stroke-width:2px,color:#166534;
+    classDef tool fill:#2563eb,stroke:#1e40af,stroke-width:1px,color:#ffffff;
+
+    class RAW,MD,META,S3 ingestion;
+    class EMB,QDR,BM25 indexation;
+    class MQ,V_RET,T_RET,FUSION,W_SUB,RERANK,DIV,LLM,Final rag;
+    class User tool;
+"""
+    st_mermaid(mermaid_code, height=1600)
+
+    st.info("💡 Ce schéma représente la configuration 'Gold Standard' du pipeline DeepInsight.")
+    
+    st.divider()
+    st.subheader("🛠️ Détails des Composants & Expertise Technique")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("### 📥 1. Phase d'Ingestion")
+        st.info("**Objectif** : Transformer le chaos des PDF en données structurées et enrichies.")
+        st.markdown("""
+        - **IBM Docling (GPU)** : Contrairement aux parseurs classiques, Docling utilise des modèles de vision pour comprendre la mise en page (tableaux complexes, multi-colonnes) et exporte un Markdown fidèle.
+        - **Enrichissement SLM (Local)** : Un modèle de langage léger (ex: Phi-3) analyse le texte en local pour extraire :
+            - *Entités* : Universités, disciplines, dates clés.
+            - *Résumés* : Synthèse sémantique pour booster la recherche.
+        - **Archivage MinIO S3** : Sanctuarisation des originaux et des versions Markdown pour une traçabilité totale.
+        """)
+        
+    with col2:
+        st.markdown("### 🗂️ 2. Phase d'Indexation")
+        st.info("**Objectif** : Créer des index multi-modaux pour une recherche hybride ultra-rapide.")
+        st.markdown("""
+        - **Embeddings text-embedding-3** : Conversion du texte en vecteurs de 1536 dimensions capturant le sens sémantique profond.
+        - **Qdrant (Vecteurs Int8)** : Base vectorielle optimisée par *quantification scalaire*. On réduit la précision des vecteurs de Float32 à Int8, divisant par 4 l'empreinte mémoire sans perte significative de précision.
+        - **Index BM25s** : Algorithme de recherche lexicale (mots-clés) implémenté en Python pur pour sa rapidité, idéal pour retrouver des noms propres ou termes techniques exacts.
+        """)
+        
+    with col3:
+        st.markdown("### 🤖 3. Moteur RAG")
+        st.info("**Objectif** : Générer une réponse véridique et sourcée à partir du contexte récupéré.")
+        st.markdown("""
+        - **Multi-Query Expansion** : La question est reformulée en 3 variantes pour capturer différents angles d'attaque sémantiques.
+        - **Fusion RRF (Reciprocal Rank Fusion)** : Combine les scores du Vector Search et du BM25 pour faire remonter les documents validés par les deux approches.
+        - **Post-Processing Avancé** :
+            - **Window Substitution** : Remplace les extraits par leur contexte élargi (fenêtre glissante) pour que le LLM comprenne l'environnement de l'information.
+            - **Cohere Rerank v3** : Un modèle de cross-encoder ré-évalue la pertinence réelle du Top-K.
+            - **Filtre de Diversité** : Élimine les redondances pour maximiser l'information utile.
+        - **GPT-4o-mini** : Synthèse finale avec un prompt "Grounding" strict pour interdire l'hallucination.
+        """)
+
+
     st.divider()
     
     st.subheader("💸 Estimation des Coûts (OpenAI)")

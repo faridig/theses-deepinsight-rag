@@ -79,12 +79,14 @@ def run_cockpit():
         scores = audit_data["scores"]
         faithfulness = scores.get('faithfulness', 0.0)
         relevancy = scores.get('answer_relevancy', 0.0)
+        precision = scores.get('context_precision', 0.0) # PBI-076
         
         status_emoji = "✅" if faithfulness >= 0.85 else "⚠️" if faithfulness >= 0.80 else "🚨"
         
         print(f"Dernier Audit : {audit_data['file']}")
         print(f"Fidélité (Faithfulness)    : {faithfulness:.2f} {status_emoji}")
         print(f"Pertinence (Relevancy)     : {relevancy:.2f}")
+        print(f"Précision (Context Prec.)  : {precision:.2f} (Gold Standard)") # PBI-076
         
         if faithfulness < 0.80:
             print("\n" + "!"*50)
