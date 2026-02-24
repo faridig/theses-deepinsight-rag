@@ -117,10 +117,10 @@ def run_async_task(cmd, success_message):
     except Exception as e:
         st.error(f"❌ Erreur lors du lancement : {e}")
 
-def st_mermaid(code: str, height: int = 850):
+def st_mermaid(code: str, height: int = 1200):
     """Rendu d'un diagramme Mermaid dans Streamlit (PBI-078)."""
     html_code = f"""
-    <div class="mermaid" style="display: flex; justify-content: center; align-items: flex-start; padding-top: 20px;">
+    <div class="mermaid" style="display: flex; justify-content: center; padding-top: 20px;">
         {code}
     </div>
     <script type="module">
@@ -128,6 +128,7 @@ def st_mermaid(code: str, height: int = 850):
         mermaid.initialize({{ 
             startOnLoad: true,
             theme: 'base',
+            flowchart: {{ useMaxWidth: false }} ,
             themeVariables: {{
                 'primaryColor': '#2563EB',
                 'primaryTextColor': '#ffffff',
@@ -143,7 +144,7 @@ def st_mermaid(code: str, height: int = 850):
         }});
     </script>
     """
-    components.html(html_code, height=height)
+    components.html(html_code, height=height, scrolling=True)
 
 # --- Pages ---
 
@@ -494,82 +495,93 @@ elif menu == "📈 Statistiques":
         st.info("Aucune donnée statistique disponible.")
         
 elif menu == "🏗️ Architecture":
-    st.header("Schéma Technique du Pipeline")
+    st.header("Schéma Technique du Pipeline Exhaustif")
     
-    st.markdown("### 🔄 Flux de Données (Theses-DeepInsight)")
-    st.write("Le schéma ci-dessous détaille l'enchaînement des étapes, du document brut à la génération de la réponse.")
+    st.markdown("### 🔄 Flux de Données Bout-en-Bout")
+    st.write("Visualisation détaillée des trois phases du pipeline : Ingestion, Indexation et Moteur RAG.")
     
     mermaid_code = """
 graph TD
-    %% Direction du flux
-    direction TB
-
-    subgraph "Phase d'Ingestion (Locale)"
-        PDF["📄 PDF Thèse"]
-        DL["🛠️ Docling"]
-        MD["📝 Texte Markdown"]
-        SLM["🧠 SLM Metadata"]
-        META["🏷️ Métadonnées"]
-        
-        PDF -->|Parsing| DL
-        DL -->|Markdown| MD
-        MD -->|Extraction| SLM
-        SLM -->|Enrichissement| META
-    end
-    
-    subgraph "Phase d'Indexation (S3 & Vector)"
-        S3["🪣 MinIO S3"]
-        EMB["🔢 text-embedding-3"]
-        QDR["🔍 Qdrant"]
-        
-        MD -->|Stockage| S3
-        META -->|Embedding| EMB
-        EMB -->|Vecteurs| QDR
-    end
-    
-    subgraph "Phase de Génération (Hybrid)"
-        User["❓ Question Utilisateur"]
-        RAG["⚙️ RAG Engine"]
-        LLM["🤖 GPT-4o-mini"]
-        Final["✅ Réponse Finale"]
-        
-        User -->|Search| QDR
-        QDR -->|Context| RAG
-        RAG -->|Prompt| LLM
-        LLM -->|Réponse| Final
+    subgraph "1. Ingestion"
+        RAW["📄 PDF"] -->|Docling GPU| MD["📝 Markdown"]
+        MD -->|SLM| META["🏷️ Métadonnées Enrichies"]
+        MD & META -->|Archivage| S3["🪣 MinIO S3"]
     end
 
-    %% Styles CSS inspirés de l'image
-    classDef pdfStyle fill:#f472b6,stroke:#db2777,stroke-width:2px,color:#fff;
-    classDef toolStyle fill:#2563eb,stroke:#1e40af,stroke-width:2px,color:#fff;
-    classDef dataStyle fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff;
-    classDef brainStyle fill:#6366f1,stroke:#4f46e5,stroke-width:2px,color:#fff;
-    classDef generationStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff;
-    classDef successStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff;
+    S3 -.-> EMB
+    META -.-> EMB
+    META -.-> BM25
 
-    class PDF pdfStyle;
-    class DL,S3,QDR,EMB,RAG toolStyle;
-    class MD,META dataStyle;
-    class SLM brainStyle;
-    class LLM,User generationStyle;
-    class Final successStyle;
+    subgraph "2. Indexation"
+        EMB["🔢 text-embedding-3"] -->|Vecteurs Int8| QDR["🔍 Qdrant"]
+        BM25["🗂️ BM25s"]
+    end
 
-    %% Style des arcs
-    linkStyle default stroke:#2563eb,stroke-width:2px;
+    QDR -.-> V_RET
+    BM25 -.-> T_RET
+
+    subgraph "3. Moteur RAG"
+        User["👤 Utilisateur"] -->|Query Expansion| MQ["🔄 Multi-Query"]
+        MQ --> V_RET["🔍 Vector Search"] & T_RET["🔍 BM25"]
+        V_RET & T_RET -->|RRF Fusion| FUSION["⚖️ Fusion"]
+        FUSION --> W_SUB["🪟 Window Substitution"] --> RERANK["💎 Cohere Rerank v3"]
+        RERANK --> DIV["🎭 Diversity Filter"] --> LLM["🤖 GPT-4o-mini"]
+        LLM --> Final["✅ Réponse Sourcée"]
+    end
+
+    %% Styles pour contraste élevé (Texte foncé sur fond clair)
+    classDef ingestion fill:#fee2e2,stroke:#ef4444,stroke-width:2px,color:#991b1b;
+    classDef indexation fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#1e40af;
+    classDef rag fill:#dcfce7,stroke:#22c55e,stroke-width:2px,color:#166534;
+    classDef tool fill:#2563eb,stroke:#1e40af,stroke-width:1px,color:#ffffff;
+
+    class RAW,MD,META,S3 ingestion;
+    class EMB,QDR,BM25 indexation;
+    class MQ,V_RET,T_RET,FUSION,W_SUB,RERANK,DIV,LLM,Final rag;
+    class User tool;
 """
-    st_mermaid(mermaid_code, height=900)
+    st_mermaid(mermaid_code, height=1600)
 
-    
-    st.info("💡 Les étapes de Parsing et d'Extraction de métadonnées sont réalisées localement pour garantir la confidentialité et réduire les coûts.")
+    st.info("💡 Ce schéma représente la configuration 'Gold Standard' du pipeline DeepInsight.")
     
     st.divider()
-    st.subheader("🛠️ Stack Technique")
-    st.write("- **Framework** : LlamaIndex")
-    st.write("- **Parsing** : Docling (IBM)")
-    st.write("- **Base Vectorielle** : Qdrant")
-    st.write("- **Stockage** : MinIO (S3 compatible)")
-    st.write("- **Modèles** : OpenAI GPT-4o-mini / text-embedding-3-small")
-    st.write("- **Observabilité** : Arize Phoenix")
+    st.subheader("🛠️ Détails des Composants & Expertise Technique")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("### 📥 1. Phase d'Ingestion")
+        st.info("**Objectif** : Transformer le chaos des PDF en données structurées et enrichies.")
+        st.markdown("""
+        - **IBM Docling (GPU)** : Contrairement aux parseurs classiques, Docling utilise des modèles de vision pour comprendre la mise en page (tableaux complexes, multi-colonnes) et exporte un Markdown fidèle.
+        - **Enrichissement SLM (Local)** : Un modèle de langage léger (ex: Phi-3) analyse le texte en local pour extraire :
+            - *Entités* : Universités, disciplines, dates clés.
+            - *Résumés* : Synthèse sémantique pour booster la recherche.
+        - **Archivage MinIO S3** : Sanctuarisation des originaux et des versions Markdown pour une traçabilité totale.
+        """)
+        
+    with col2:
+        st.markdown("### 🗂️ 2. Phase d'Indexation")
+        st.info("**Objectif** : Créer des index multi-modaux pour une recherche hybride ultra-rapide.")
+        st.markdown("""
+        - **Embeddings text-embedding-3** : Conversion du texte en vecteurs de 1536 dimensions capturant le sens sémantique profond.
+        - **Qdrant (Vecteurs Int8)** : Base vectorielle optimisée par *quantification scalaire*. On réduit la précision des vecteurs de Float32 à Int8, divisant par 4 l'empreinte mémoire sans perte significative de précision.
+        - **Index BM25s** : Algorithme de recherche lexicale (mots-clés) implémenté en Python pur pour sa rapidité, idéal pour retrouver des noms propres ou termes techniques exacts.
+        """)
+        
+    with col3:
+        st.markdown("### 🤖 3. Moteur RAG")
+        st.info("**Objectif** : Générer une réponse véridique et sourcée à partir du contexte récupéré.")
+        st.markdown("""
+        - **Multi-Query Expansion** : La question est reformulée en 3 variantes pour capturer différents angles d'attaque sémantiques.
+        - **Fusion RRF (Reciprocal Rank Fusion)** : Combine les scores du Vector Search et du BM25 pour faire remonter les documents validés par les deux approches.
+        - **Post-Processing Avancé** :
+            - **Window Substitution** : Remplace les extraits par leur contexte élargi (fenêtre glissante) pour que le LLM comprenne l'environnement de l'information.
+            - **Cohere Rerank v3** : Un modèle de cross-encoder ré-évalue la pertinence réelle du Top-K.
+            - **Filtre de Diversité** : Élimine les redondances pour maximiser l'information utile.
+        - **GPT-4o-mini** : Synthèse finale avec un prompt "Grounding" strict pour interdire l'hallucination.
+        """)
+
 
     st.divider()
     

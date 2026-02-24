@@ -12,6 +12,7 @@
 - **Idempotence Technique** : La normalisation des thèmes doit être robuste aux préfixes techniques (ex: `theses-`). L'implémentation d'une fonction `normalize_theme` idempotente évite les collisions et les erreurs de chemins dans les systèmes distribués (Qdrant + S3).
 - **Intégrité de la Purge** : Pour garantir un système "propre", la suppression logique (base de données) doit toujours être couplée à une suppression physique (stockage d'objets) et technique (cache applicatif).
 - **Stabilité des Métriques** : L'utilisation d'un référentiel de vérité (Ground Truth) fixe est la seule méthode fiable pour stabiliser des mesures de précision (Context Precision) et éviter les valeurs 'NaN' induites par des données synthétiques trop volatiles.
+- **Visualisation Holistique (Reviewer Note)** : L'intégration d'un schéma d'architecture exhaustif directement dans le cockpit admin réduit radicalement le temps de formation des nouveaux opérateurs et facilite le diagnostic rapide des pannes de pipeline.
 
 ## [1.11.0] - 2026-02-23
 ### Ajouté
