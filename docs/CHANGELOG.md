@@ -1,6 +1,6 @@
 # Changelog - Theses-DeepInsight RAG
 
-## [1.12.0] - 2026-02-23
+## [1.12.0] - 2026-02-24
 ### Ajouté
 - **Sprint 21 : Clean Slate & Gold Standard (PBI-071, 072, 073, 075, 076, 077, 078)**
     - **PBI-071 & 072** : Grand nettoyage S3 et réorganisation thématique physique. Les documents sont désormais rangés dans `themes/{slug}/docs/`.

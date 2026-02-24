@@ -1,82 +1,58 @@
-# SPRINT PLAN N°21 : "Clean Slate & Gold Standard"
+# SPRINT PLAN N°22 : "Local Edge & Quality Boost"
 
-**Sprint Goal** : Assurer l'intégrité totale du système par un nettoyage profond de l'infrastructure S3, la synchronisation des suppressions et la restauration de la métrique "Context Precision" via le référentiel de vérité.
+**Sprint Goal** : Réduire les coûts d'ingestion via un SLM local (Ollama) et restaurer l'excellence scientifique en redressant la Fidélité (>0.85) et la Pertinence (>0.70).
 
-**Statut** : EN ATTENTE DE VALIDATION
+**Statut** : EN COURS
 
 ---
 
-## 🧹 VOLET 1 : INFRASTRUCTURE & HYGIÈNE
+## 🏗️ VOLET 1 : SOUVERAINETÉ & PERFORMANCE (SLM)
 
-### [PBI-071] Grand Nettoyage S3 (Housekeeping)
+### [PBI-079] Infra SLM Local (Ollama)
+**Priorité** : Haute | **Estimation** : M
+**User Story** : "En tant que Lead-Dev, je veux un service Ollama tournant en local dans le Docker Compose, afin de traiter les métadonnées sans dépendre du cloud."
+**Critères d'Acceptation** :
+- [ ] Ajout du service `ollama` dans `docker-compose.yml`.
+- [ ] Téléchargement automatisé du modèle `llama3.2:3b` au démarrage.
+- [ ] Vérification de l'accès via API REST depuis le conteneur Ingestion.
+
+### [PBI-080] Handoff Métadonnées vers SLM
 **Priorité** : Haute | **Estimation** : S
-**User Story** : "En tant qu'Administrateur, je veux que les buckets inutiles soient supprimés et les fichiers orphelins (racine) soient nettoyés, afin de maintenir une source de vérité propre."
+**User Story** : "En tant qu'Administrateur, je veux que l'extraction du titre et du résumé soit faite par le LLM local, afin de rendre l'ingestion massive gratuite."
 **Critères d'Acceptation** :
-- [ ] Suppression de tous les buckets MinIO sauf `theses-data`.
-- [ ] Migration du fichier PDF orphelin à la racine vers un dossier de secours ou thématique.
-- [ ] Suppression du dossier `agriculture` vide/orphelin à la racine.
+- [ ] Remplacement de `OpenAI` par `Ollama` dans les classes `TitleExtractor` et `SummaryExtractor`.
+- [ ] Filtrage intelligent : Exclusion des sections "Remerciements/Dédicaces" via Docling.
+- [ ] Ciblage prioritaire des sections "Abstract/Résumé" (début ou fin de document) et "Conclusion".
+- [ ] Validation de la qualité des résumés produits (comparaison vs GPT-4o).
 
-### [PBI-072] Réorganisation Thématique Physique
-**Priorité** : Moyenne | **Estimation** : M
-**User Story** : "En tant qu'Administrateur, je veux que les PDFs soient rangés physiquement par thèmes dans MinIO, afin de pouvoir naviguer visuellement dans mes documents."
-**Critères d'Acceptation** :
-- [ ] Migration des fichiers : `theses-data/pdfs/{hash}.pdf` -> `theses-data/themes/{theme}/docs/{filename}.pdf`.
-- [ ] Mise à jour du `ThemeIngestor` pour pointer vers ces nouveaux chemins.
+---
 
-### [PBI-073] Synchronisation Totale de la Purge
+## 🔬 VOLET 2 : EXCELLENCE RAG (FIABILITÉ & PERTINENCE)
+
+### [PBI-081] Durcissement Prompt & Anti-Hallucination
 **Priorité** : Critique | **Estimation** : S
-**User Story** : "En tant qu'Administrateur, je veux que la suppression d'une collection dans le Cockpit efface aussi les fichiers dans MinIO, afin d'éviter les collections fantômes."
+**User Story** : "En tant que Chef d'Orchestre, je veux que le système refuse de répondre s'il n'a pas de sources, afin de remonter la Fidélité (actuellement 0.59) à >0.85."
 **Critères d'Acceptation** :
-- [ ] GIVEN une collection "animaux-zoologie" existante dans Qdrant et MinIO.
-- [ ] WHEN je clique sur "Supprimer" dans le Cockpit.
-- [ ] THEN la collection Qdrant est supprimée ET le dossier `themes/animaux-zoologie/` est purgé de MinIO.
+- [ ] GIVEN une question hors-sujet.
+- [ ] WHEN le système cherche dans les sources.
+- [ ] THEN il répond "Je ne sais pas" au lieu d'inventer (Strict Context Adherence).
+- [ ] Obligation de citation formatée pour chaque affirmation.
 
----
-
-## 🔬 VOLET 2 : FIABILITÉ SCIENTIFIQUE (RAGAS)
-
-### [PBI-076] Restauration de la Context Precision (Gold Standard)
+### [PBI-082] Optimisation du Retrieval Hybride & Reranking
 **Priorité** : Critique | **Estimation** : M
-**User Story** : "En tant qu'Administrateur, je veux utiliser le fichier `ground_truth.json` pour calculer une précision réelle, afin de ne plus avoir de valeurs 'NaN' dans mes rapports."
+**User Story** : "En tant qu'Utilisateur, je veux que les documents remontés soient plus proches de ma question, afin de remonter la Pertinence (actuellement 0.37) à >0.70."
 **Critères d'Acceptation** :
-- [ ] Branchement du script d'audit sur `data/ground_truth.json`.
-- [ ] Affichage de la métrique "Context Precision" dans le Cockpit Streamlit.
-- [ ] Export automatique de tous les scores Ragas vers Arize Phoenix.
+- [ ] **Hybrid Tuning** : Implémentation de `relative_score_fusion` dans `QdrantVectorStore` pour une meilleure pondération.
+- [ ] **Alpha Calibration** : Fixation de `alpha=0.7` (priorité sémantique) comme base de benchmark.
+- [ ] **Cohere Thresholding** : Implémentation d'un filtre post-rerank éjectant tout nœud avec un `rank_score < 0.6`.
+- [ ] **Multi-Query Safety** : Réduction de la température à `0.1` pour le `QueryTransform` et durcissement du prompt de réécriture pour éviter le "Semantic Drift".
+- [ ] **Small-to-Big Retrieval** : Activation de la substitution de fenêtre (Window Substitution) uniquement si le score de rerank est élevé.
 
 ---
 
-## 📖 VOLET 3 : EXPÉRIENCE ADMIN & PÉDAGOGIE
-
-### [PBI-075] Guide des Metrics & Aide à la Décision
-**Priorité** : Moyenne | **Estimation** : XS
-**User Story** : "En tant qu'Administrateur, je veux comprendre chaque score et savoir comment réagir, afin de piloter la qualité de mon RAG de manière experte."
-**Critères d'Acceptation** :
-- [ ] Ajout d'une section "Aide" dans le Dashboard Qualité.
-- [ ] Dictionnaire des metrics (Fidélité, Pertinence, Précision) avec seuils d'alerte et solutions.
-
-### [PBI-077] Sourcing Check (Prévisualisation theses.fr)
-**Priorité** : Moyenne | **Estimation** : S
-**User Story** : "En tant qu'Administrateur, je veux voir la liste des thèses trouvées avant de lancer l'ingestion, afin d'éviter d'indexer des documents hors-sujet."
-**Critères d'Acceptation** :
-- [ ] Affichage d'un tableau récapitulatif (Titres/Années) après la recherche theses.fr.
-- [ ] Bouton de confirmation pour déclencher l'ingestion effective.
-
-### [PBI-078] Visualisation du Flux (Architecture View)
-**Priorité** : Moyenne | **Estimation** : XS
-**User Story** : "En tant qu'Administrateur, je veux visualiser le schéma technique du pipeline dans le Cockpit, afin de comprendre l'enchaînement des étapes (parsing, métadonnées locales, génération)."
-**Critères d'Acceptation** :
-- [ ] Nouvel onglet "Architecture" dans le Cockpit Streamlit.
-- [ ] Schéma Mermaid ou SVG détaillant :
-    - PDF -> Docling (Local) -> Markdown.
-    - Markdown -> SLM Metadata (Local) -> Metadata.
-    - Text+Metadata -> Embedding (Local) -> Qdrant.
-    - Question -> GPT-4o (Cloud) -> Réponse.
+## 🏛️ JOURNAL DES DÉCISIONS (Sprint 22)
+- **DÉCISION 22.1** : Adoption de `llama3.2:3b` comme SLM de référence pour les tâches d'extraction structurée (Title/Summary).
+- **DÉCISION 22.2** : Priorité absolue à la Fidélité sur la loquacité : le système doit préférer une réponse courte et sourcée à une synthèse longue potentiellement hallucinogène.
 
 ---
-
-## 🏛️ JOURNAL DES DÉCISIONS (Sprint 21)
-- **DÉCISION 21.1** : Abandon du dossier central unique `pdfs/` au profit d'une structure thématique `themes/{nom}/docs/` pour satisfaire le besoin de lisibilité de l'utilisateur.
-- **DÉCISION 21.2** : Utilisation du fichier `ground_truth.json` comme benchmark de référence (Gold Standard) pour stabiliser les mesures de précision.
-
----
-**"PLANNING VALIDÉ. À TOI LEAD-DEV."**
+**PLANNING VALIDÉ. À TOI LEAD-DEV.**
