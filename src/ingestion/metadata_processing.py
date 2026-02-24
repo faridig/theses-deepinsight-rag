@@ -1,8 +1,8 @@
-import re
 import logging
-from typing import List, Sequence
+from typing import Sequence, List, Any
 from llama_index.core.schema import BaseNode, TransformComponent
 from llama_index.core.extractors import TitleExtractor, SummaryExtractor
+from pydantic import Field, PrivateAttr
 from src.config import get_ollama_llm
 
 logger = logging.getLogger(__name__)
@@ -12,18 +12,23 @@ class ThesisMetadataProcessor(TransformComponent):
     Composant de transformation pour le filtrage et l'extraction de métadonnées (PBI-080).
     Utilise Ollama pour le titre et le résumé.
     """
+    ollama_model: str = Field(default="llama3.2:3b", description="Modèle Ollama à utiliser")
+    exclude_keywords: List[str] = Field(
+        default_factory=lambda: ["remerciements", "dédicaces", "acknowledgements", "dedications"]
+    )
+    priority_keywords: List[str] = Field(
+        default_factory=lambda: ["abstract", "résumé", "conclusion", "introduction"]
+    )
     
-    def __init__(self, ollama_model: str = "llama3.2:3b"):
-        super().__init__()
-        self.llm = get_ollama_llm(model=ollama_model)
-        
-        # Initialisation des extractors LlamaIndex avec Ollama
-        self.title_extractor = TitleExtractor(llm=self.llm, nodes=5)
-        self.summary_extractor = SummaryExtractor(llm=self.llm, summaries=["self"])
-        
-        # Mots-clés pour le filtrage
-        self.exclude_keywords = ["remerciements", "dédicaces", "acknowledgements", "dedications"]
-        self.priority_keywords = ["abstract", "résumé", "conclusion", "introduction"]
+    _llm: Any = PrivateAttr()
+    _title_extractor: Any = PrivateAttr()
+    _summary_extractor: Any = PrivateAttr()
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        self._llm = get_ollama_llm(model=self.ollama_model)
+        self._title_extractor = TitleExtractor(llm=self._llm, nodes=5)
+        self._summary_extractor = SummaryExtractor(llm=self._llm, summaries=["self"])
 
     def _should_exclude(self, node: BaseNode) -> bool:
         """
@@ -84,15 +89,15 @@ class ThesisMetadataProcessor(TransformComponent):
             # TitleExtractor.extract() attend une liste de nodes et retourne une liste de dicts de métadonnées
             # On va le faire manuellement pour avoir plus de contrôle si besoin, 
             # mais on peut utiliser l'interface standard.
-            titles_meta = self.title_extractor.extract(title_nodes)
+            titles_meta = self._title_extractor.extract(title_nodes)
             
             # 3. Extraction du résumé
             # On prend un échantillon représentatif (début, milieu, fin des nœuds filtrés)
-            summary_sample = filtered_nodes_for_metadata
+            summary_sample = list(filtered_nodes_for_metadata)
             if len(summary_sample) > 10:
                 summary_sample = summary_sample[:5] + summary_sample[-5:]
                 
-            summaries_meta = self.summary_extractor.extract(summary_sample)
+            summaries_meta = self._summary_extractor.extract(summary_sample)
 
             # 4. Propagation des métadonnées à TOUS les nœuds du document
             # (LlamaIndex le fait généralement si on passe par IngestionPipeline, 
