@@ -75,13 +75,18 @@ class NodeCleaningProcessor(BaseNodePostprocessor):
             "_node_content", "relationships", "file_path", "file_size", 
             "creation_date", "last_modified_date", "original_text", 
             "window", "doc_id", "document_id", "ref_doc_id", 
-            "_node_type", "file_type", "file_name"
+            "_node_type", "file_type", "file_name", "ollama_summary", "extracted_title"
         ]
         
         for node_with_score in nodes:
             node = node_with_score.node
             current_excluded = list(excluded_keys)
-            if "titre" not in node.metadata and "file_name" in current_excluded:
+            
+            # Si on a le titre extrait via Ollama, on l'utilise
+            if "extracted_title" in node.metadata and node.metadata["extracted_title"] != "Titre non extrait":
+                node.metadata["titre_document"] = node.metadata["extracted_title"]
+
+            if "titre" not in node.metadata and "titre_document" not in node.metadata and "file_name" in current_excluded:
                 current_excluded.remove("file_name")
             
             node.excluded_llm_metadata_keys = current_excluded
@@ -93,6 +98,33 @@ class NodeCleaningProcessor(BaseNodePostprocessor):
             if "page_label" not in node.metadata:
                 node.metadata["page_label"] = "N/A"
                 
+        return nodes
+
+class CohereThresholdPostprocessor(BaseNodePostprocessor):
+    """
+    Filtre les nœuds ayant un score de reranking trop faible (PBI-082).
+    """
+    threshold: float = 0.6
+
+    def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
+        # On ne filtre que si les nœuds ont été rerankés (le score est généralement normalisé par Cohere)
+        return [node for node in nodes if node.score >= self.threshold]
+
+class ConditionalWindowReplacementProcessor(BaseNodePostprocessor):
+    """
+    Remplace le texte du nœud par sa fenêtre contextuelle seulement si le score est élevé (PBI-082).
+    Cela permet de garder de la précision sur les résultats moyens et du contexte sur les excellents.
+    """
+    threshold: float = 0.7
+    target_metadata_key: str = "window"
+
+    def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
+        for node_with_score in nodes:
+            if node_with_score.score >= self.threshold:
+                node = node_with_score.node
+                window_text = node.metadata.get(self.target_metadata_key)
+                if window_text:
+                    node.set_content(window_text)
         return nodes
 
 class DiversityPostprocessor(BaseNodePostprocessor):
@@ -146,12 +178,6 @@ class RAGEngine:
         self._shared_vector_service: Optional[VectorService] = None
         self.index_ref = None 
         
-        # 2. Pipeline de Post-Processing commun
-        self.post_processors: List[BaseNodePostprocessor] = [
-            MetadataReplacementPostProcessor(target_metadata_key="window"),
-            NodeCleaningProcessor(),
-        ]
-        
         # Initialisation paresseuse du reranker
         self.reranker = None
         cohere_api_key = os.getenv("COHERE_API_KEY")
@@ -167,12 +193,12 @@ class RAGEngine:
 
         self.qa_prompt_tmpl = PromptTemplate(
             "Tu es un expert en analyse de thèses académiques. Ta mission est de répondre aux questions de manière 100% fidèle au contexte fourni.\n\n"
-            "### RÈGLES DE RIGUEUR SCIENTIFIQUE :\n"
-            "1. UTILISE UNIQUEMENT LE CONTEXTE FOURNI. N'utilise aucune connaissance extérieure, même si elle te semble correcte.\n"
-            "2. PAS DE HALLUCINATION : Si une information n'est pas explicitement mentionnée dans le contexte, réponds exactement : 'Je suis désolé, mais je ne trouve pas d'information à ce sujet dans les thèses analysées.'\n"
-            "3. CITATION SYSTÉMATIQUE : Pour chaque affirmation, cite obligatoirement la source entre crochets à la fin de la phrase (ex: [Titre de la thèse, Auteur]).\n"
-            "4. FIDÉLITÉ MAXIMALE : Ne déforme pas les concepts techniques et reste neutre.\n"
-            "5. SI LE CONTEXTE EST PARTIEL : Réponds uniquement sur la base de ce qui est présent et signale les éléments manquants par rapport à la question.\n\n"
+            "### RÈGLES DE RIGUEUR SCIENTIFIQUE (STRICT CONTEXT ADHERENCE) :\n"
+            "1. UTILISE UNIQUEMENT LE CONTEXTE FOURNI. N'utilise aucune connaissance extérieure. Si l'information n'est pas là, tu ne l'inventes pas.\n"
+            "2. RÉPONSE NÉGATIVE OBLIGATOIRE : Si le contexte ne contient pas la réponse à la question, réponds EXACTEMENT : 'Je ne sais pas (information non présente dans les sources).' Ne tente pas de déduire ou de généraliser.\n"
+            "3. CITATION SYSTÉMATIQUE ET PRÉCISE : Pour chaque affirmation, cite obligatoirement la source entre crochets à la fin de la phrase. Format : [Titre, Auteur, Page X].\n"
+            "4. PRIORITÉ À LA FIABILITÉ : Il vaut mieux une réponse courte et sourcée qu'une synthèse longue non prouvée.\n"
+            "5. AUCUN 'SLIPPAGE' SÉMANTIQUE : Reste strictement dans le domaine défini par la question.\n\n"
             "---------------------\n"
             "CONTEXTE :\n"
             "{context_str}\n"
@@ -258,18 +284,25 @@ class RAGEngine:
 
         # Fusion Retriever
         # On utilise 3 requêtes si on a un vrai LLM ou si on est en environnement de test
-        has_real_llm = bool(os.getenv("OPENAI_API_KEY"))
+        has_openai_key = bool(os.getenv("OPENAI_API_KEY"))
         is_test = os.getenv("IS_TESTING") == "1" or "pytest" in sys.modules
-        num_queries = 3 if (has_real_llm or is_test) else 1
+        num_queries = 3 if (has_openai_key or is_test) else 1
         
+        # PBI-082: Configuration du LLM pour la transformation de requête avec T=0.1
+        query_gen_llm = None
+        if has_openai_key:
+            from llama_index.llms.openai import OpenAI
+            query_gen_llm = OpenAI(model="gpt-4o-mini", temperature=0.1)
+
         fusion_retriever = ParallelMultiQueryRetriever(
             retrievers,
             similarity_top_k=RETRIEVAL_TOP_K,
             num_queries=num_queries,
-            mode=FUSION_MODES.RECIPROCAL_RANK,
+            mode=FUSION_MODES.RELATIVE_SCORE, # PBI-082: Hybrid Tuning
+            retriever_weights=[0.7, 0.3] if len(retrievers) > 1 else [1.0], # Alpha Calibration
             use_async=vector_service.aclient is not None and not isinstance(vector_service.aclient, (str, type(None))),
             verbose=False,
-            llm=Settings.llm
+            llm=query_gen_llm or Settings.llm
         )
         
         # Hack pour le wrapper AsyncQdrantLocalWrapper (qui n'est pas une instance d'AsyncQdrantClient)
@@ -278,10 +311,15 @@ class RAGEngine:
 
         # Query Engine
         all_post_processors = [
-            *self.post_processors,
+            NodeCleaningProcessor(), # PBI-012
         ]
+        
         if self.reranker:
             all_post_processors.append(self.reranker)
+            all_post_processors.append(CohereThresholdPostprocessor(threshold=0.6)) # PBI-082
+        
+        # PBI-082: Small-to-Big Retrieval conditionnel
+        all_post_processors.append(ConditionalWindowReplacementProcessor(threshold=0.7))
         
         all_post_processors.append(DiversityPostprocessor(target_top_n=3))
         
