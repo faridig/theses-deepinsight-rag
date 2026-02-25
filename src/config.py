@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from llama_index.core import Settings
 import llama_index.llms.openai
 import llama_index.embeddings.openai
+import llama_index.llms.ollama
 from llama_index.core.llms import MockLLM
 from llama_index.core.embeddings import MockEmbedding
 
@@ -153,3 +154,10 @@ def setup_settings():
         Settings.embed_model = MockEmbedding(embed_dim=1536)
     
     logger.info(f"LlamaIndex Settings initialisés (LLM: {type(Settings.llm).__name__}, Embed: {type(Settings.embed_model).__name__})")
+
+def get_ollama_llm(model: str = "llama3.2:3b"):
+    """
+    Retourne une instance de LLM Ollama pour les tâches locales (PBI-079).
+    """
+    base_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+    return llama_index.llms.ollama.Ollama(model=model, base_url=base_url, request_timeout=120.0)

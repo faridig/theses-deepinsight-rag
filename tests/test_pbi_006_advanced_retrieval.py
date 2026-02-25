@@ -31,7 +31,7 @@ class TestAdvancedRetrieval:
             assert kwargs['num_queries'] == 3
             assert kwargs['similarity_top_k'] == 10
             # mode is an enum
-            assert "RECIPROCAL_RANK" in str(kwargs['mode'])
+            assert "RELATIVE_SCORE" in str(kwargs['mode'])
             assert kwargs['use_async'] is True
             
             # Assertions for CohereRerank
@@ -47,8 +47,8 @@ class TestAdvancedRetrieval:
             # Check retriever (could be positional or keyword)
             retriever = qe_kwargs.get('retriever') or qe_args[0]
             assert retriever == mock_fusion.return_value
-            # Should have node_postprocessors including cohere and MetadataReplacementPostProcessor
+            # Should have node_postprocessors including cohere
             post_processors = qe_kwargs['node_postprocessors']
             assert any(isinstance(p, MagicMock) and p == mock_cohere.return_value for p in post_processors)
-            # Check for the presence of MetadataReplacementPostProcessor (which is in self.post_processors)
-            assert any('MetadataReplacementPostProcessor' in str(type(p)) or p.__class__.__name__ == 'MetadataReplacementPostProcessor' for p in post_processors)
+            # Check for the presence of ConditionalWindowReplacementProcessor (PBI-082)
+            assert any('ConditionalWindowReplacementProcessor' in str(type(p)) or p.__class__.__name__ == 'ConditionalWindowReplacementProcessor' for p in post_processors)

@@ -26,22 +26,26 @@ class VectorService:
             if client:
                 self.client = client
                 self.aclient = aclient
-            else:
+            elif self.storage_path == ":memory:":
+                logger.info("Utilisation de Qdrant en mémoire")
+                self.client = QdrantClient(":memory:")
+                self.aclient = None # L'async est désactivé en local pour éviter les verrous
+            elif self.storage_path and self.storage_path != "./storage/qdrant":
+                logger.info(f"Utilisation du stockage local Qdrant (Isolation Test) : {self.storage_path}")
+                os.makedirs(self.storage_path, exist_ok=True)
+                self.client = QdrantClient(path=self.storage_path)
+                self.aclient = None
+            elif os.getenv("QDRANT_URL"):
                 qdrant_url = os.getenv("QDRANT_URL")
-                if qdrant_url:
-                    logger.info(f"Utilisation du serveur Qdrant à {qdrant_url}")
-                    # Migration gRPC (PBI-022)
-                    self.client = QdrantClient(url=qdrant_url, prefer_grpc=True)
-                    self.aclient = AsyncQdrantClient(url=qdrant_url, prefer_grpc=True)
-                elif self.storage_path == ":memory:":
-                    logger.info("Utilisation de Qdrant en mémoire")
-                    self.client = QdrantClient(":memory:")
-                    self.aclient = None # L'async est désactivé en local pour éviter les verrous
-                else:
-                    logger.info(f"Utilisation du stockage local Qdrant : {self.storage_path}")
-                    os.makedirs(self.storage_path, exist_ok=True)
-                    self.client = QdrantClient(path=self.storage_path)
-                    self.aclient = None 
+                logger.info(f"Utilisation du serveur Qdrant à {qdrant_url}")
+                # Migration gRPC (PBI-022)
+                self.client = QdrantClient(url=qdrant_url, prefer_grpc=True)
+                self.aclient = AsyncQdrantClient(url=qdrant_url, prefer_grpc=True)
+            else:
+                logger.info(f"Utilisation du stockage local Qdrant par défaut : {self.storage_path}")
+                os.makedirs(self.storage_path, exist_ok=True)
+                self.client = QdrantClient(path=self.storage_path)
+                self.aclient = None 
             
             # Initialisation du Vector Store Qdrant (PBI-Review: Isolation Constructeur)
             self.vector_store = QdrantVectorStore(

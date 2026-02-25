@@ -39,8 +39,22 @@ class TestThesesClientS3(unittest.TestCase):
         self.assertTrue(s3_path.startswith(self.bucket))
         self.assertTrue(self.fs.exists(s3_path))
         
-        # Clean up
+        # Clean up files
         self.fs.rm(s3_path)
+        # Clean up the reference file if it exists
+        ref_path = f"{self.bucket}/unsorted/{thesis_id}.ref"
+        if self.fs.exists(ref_path):
+            self.fs.rm(ref_path)
+
+    def tearDown(self):
+        """Nettoyage du bucket après les tests (PBI-Review: Hygiène S3)."""
+        if hasattr(self, "fs") and hasattr(self, "bucket"):
+            try:
+                if self.fs.exists(self.bucket):
+                    self.fs.rm(self.bucket, recursive=True)
+                    print(f"\n[CLEANUP] Bucket {self.bucket} supprimé.")
+            except Exception as e:
+                print(f"\n[WARNING] Échec du nettoyage du bucket {self.bucket}: {e}")
 
 if __name__ == "__main__":
     unittest.main()

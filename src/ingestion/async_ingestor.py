@@ -6,6 +6,7 @@ from llama_index.core import Settings
 from llama_index.core.ingestion import IngestionPipeline, IngestionCache
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import Document, BaseNode
+from src.ingestion.metadata_processing import ThesisMetadataProcessor
 from llama_index.core.storage.kvstore import SimpleKVStore
 from src.indexing.vector_service import VectorService
 
@@ -42,6 +43,7 @@ class AsyncIngestor:
         self.pipeline = IngestionPipeline(
             transformations=[
                 SentenceSplitter(chunk_size=1024, chunk_overlap=20),
+                ThesisMetadataProcessor(), # PBI-080: Extraction de métadonnées via Ollama
                 Settings.embed_model,
             ],
             vector_store=self.vector_service.vector_store,

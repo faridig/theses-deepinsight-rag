@@ -74,15 +74,26 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-061** | **[TECH] Infrastructure Résiliente** | Persistance du cache d'ingestion et de l'historique Arize Phoenix. | DONE | HAUTE |
 | **PBI-062** | **[ADMIN] Gouvernance & Souveraineté** | Cycle de vie (Delete/Purge) et Re-Sync des thèmes depuis MinIO. | DONE | HAUTE |
 | **PBI-070** | **[ADMIN] Cockpit Control Plane (Streamlit)** | Centralisation de la gouvernance dans une application Streamlit dédiée. | DONE | CRITIQUE |
-| **PBI-071** | **[INFRA] Grand Nettoyage S3 (Housekeeping)** | Purge des buckets inutiles et migration des fichiers orphelins vers la structure cible. | PENDING | CRITIQUE |
-| **PBI-072** | **[INFRA] Réorganisation Thématique S3** | Migration physique des PDF du dossier `pdfs/` vers `themes/{nom_theme}/` pour plus de clarté visuelle. | PENDING | HAUTE |
-| **PBI-073** | **[ADMIN] Synchronisation Totale Purge UI** | Correction du bug de suppression : garantir que `delete_collection` (Qdrant) entraîne la purge physique sur MinIO. | PENDING | CRITIQUE |
-| **PBI-075** | **[UX/ADMIN] Guide Contextuel & Aide aux Metrics** | Intégration d'infobulles et d'une section "Interprétation" dans le Dashboard Qualité. | PENDING | MOYENNE |
-| **PBI-076** | **[TECH] Activation & Correction de Context Precision** | Re-câblage de `ground_truth.json` + Affichage Context Precision dans le Cockpit. | PENDING | CRITIQUE |
-| **PBI-077** | **[ADMIN] Sourcing Check (Prévisualisation)** | Affichage d'un tableau récapitulatif (Titres/Années) avant de déclencher l'ingestion massive. | PENDING | MOYENNE |
-| **PBI-078** | **[UX/ADMIN] Visualisation du Flux (Architecture View)** | Ajout d'un onglet pédagogique montrant le parcours d'une thèse (Parsing -> SLM -> Qdrant). | PENDING | MOYENNE |
-| **PBI-079** | **[TECH] Infra SLM Local (Ollama/vLLM)** | Intégration d'un service de LLM local (Llama 3.2) dans Docker pour les tâches asynchrones. | PENDING | HAUTE |
-| **PBI-080** | **[TECH] Handoff Métadonnées SLM** | Migration de `TitleExtractor` et `SummaryExtractor` vers le LLM local pour supprimer les coûts d'ingestion. | PENDING | HAUTE |
+| **PBI-071** | **[INFRA] Grand Nettoyage S3 (Housekeeping)** | Purge des buckets inutiles et migration des fichiers orphelins vers la structure cible. | DONE | CRITIQUE |
+| **PBI-072** | **[INFRA] Réorganisation Thématique S3** | Migration physique des PDF du dossier `pdfs/` vers `themes/{nom_theme}/` pour plus de clarté visuelle. | DONE | HAUTE |
+| **PBI-073** | **[ADMIN] Synchronisation Totale Purge UI** | Correction du bug de suppression : garantir que `delete_collection` (Qdrant) entraîne la purge physique sur MinIO. | DONE | CRITIQUE |
+| **PBI-075** | **[UX/ADMIN] Guide Contextuel & Aide aux Metrics** | Intégration d'infobulles et d'une section "Interprétation" dans le Dashboard Qualité. | DONE | MOYENNE |
+| **PBI-076** | **[TECH] Activation & Correction de Context Precision** | Re-câblage de `ground_truth.json` + Affichage Context Precision dans le Cockpit. | DONE | CRITIQUE |
+| **PBI-077** | **[ADMIN] Sourcing Check (Prévisualisation)** | Affichage d'un tableau récapitulatif (Titres/Années) avant de déclencher l'ingestion massive. | DONE | MOYENNE |
+| **PBI-078** | **[UX/ADMIN] Visualisation du Flux (Architecture View)** | Ajout d'un onglet pédagogique montrant le parcours d'une thèse (Parsing -> SLM -> Qdrant). | DONE | MOYENNE |
+| **PBI-079** | **[TECH] Infra SLM Local (Ollama/vLLM)** | Intégration d'un service de LLM local (Llama 3.2) dans Docker pour les tâches asynchrones. | IN_PROGRESS | HAUTE |
+| **PBI-080** | **[TECH] Handoff Métadonnées SLM** | Migration de `TitleExtractor` et `SummaryExtractor` vers le LLM local pour supprimer les coûts d'ingestion. | IN_PROGRESS | HAUTE |
+| **PBI-081** | **[QUALITÉ] Durcissement Prompt & Anti-Hallucination** | Révision du System Prompt pour forcer la citation stricte et interdire les connaissances externes. | IN_PROGRESS | CRITIQUE |
+| **PBI-082** | **[QUALITÉ] Optimisation Retrieval Hybride & Reranking** | Réglage alpha (0.7), fusion `relative_score` et seuil de score Cohere (>0.6) pour remonter la Pertinence. | IN_PROGRESS | CRITIQUE |
+| **PBI-090** | **[ADMIN] Datasets de Vérité Thématiques** | Isolation des `ground_truth_{theme}.json` pour des tests indépendants par domaine. | PENDING | HAUTE |
+| **PBI-091** | **[ADMIN] Moteur d'Audit Dual (Trigger Mixte)** | Audit sur dataset (Lab) vs traces (Terrain). Déclenchement hybride : Automatique (Nightly) pour les tendances et Manuel (UI) pour le diagnostic. | PENDING | HAUTE |
+| **PBI-092** | **[UX/ADMIN] Vue Comparative & Benchmarking** | Tableau de bord centralisé inter-thèmes. Inclut des descriptions didactiques des modes d'audit (Auto vs Manuel). | PENDING | CRITIQUE |
+| **PBI-093** | **[UX/ADMIN] Module d'Interprétation Intelligente** | Traduction des metrics en langage naturel, conseils actionnables selon les scores et lexique hybride systématique. | PENDING | HAUTE |
+
+| **PBI-094** | **[UX/ADMIN] Courbes de Tendance (Timeline)** | Graphiques d'évolution historique des scores par thème pour mesurer l'impact des optimisations. | PENDING | MOYENNE |
+| **PBI-095** | **[ADMIN] Traçabilité de Configuration** | Liaison automatique des scores à la version du Prompt et au modèle de LLM utilisé. | PENDING | MOYENNE |
+| **PBI-096** | **[GOUVERNANCE] Certification & Seuils** | Système de badges `CERTIFIÉ` / `QUARANTAINE` selon des seuils de metrics configurables par thème. | PENDING | HAUTE |
+| **PBI-097** | **[TECH] Sélecteur de Juge Hybride** | Option dans l'UI pour choisir entre GPT-4o-mini (Routine) et GPT-4o (Certification) comme juge. | PENDING | MOYENNE |
 
 ---
 
@@ -99,4 +110,4 @@ Tout ticket entrant en Sprint doit comporter :
 - **Nouveauté Sprint 19** : Intégration asynchrone pour l'interface Admin afin de ne pas bloquer le thread principal Chainlit.
 
 ---
-*Dernière mise à jour : 23/02/2026*
+*Dernière mise à jour : 24/02/2026*
