@@ -45,12 +45,17 @@ async def test_qdrant_hardening_configuration():
         print(f"\n[OK] Collection {collection_name} configurée avec succès (On-disk: True, Quantization: INT8)")
 
     finally:
-        # Nettoyage
-        if service.aclient:
-            try:
+        # Nettoyage rigoureux (PBI-Review: Hygiène Qdrant)
+        # On essaie via aclient d'abord, puis client sync par sécurité
+        try:
+            if service.aclient:
                 await service.aclient.delete_collection(collection_name)
-            except Exception:
-                pass
+            elif service.client:
+                service.client.delete_collection(collection_name)
+            print(f"[CLEANUP] Collection {collection_name} supprimée.")
+        except Exception as e:
+            print(f"[WARNING] Échec du nettoyage de la collection : {e}")
+        
         service.close()
 
 if __name__ == "__main__":
