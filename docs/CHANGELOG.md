@@ -1,5 +1,21 @@
 # Changelog - Theses-DeepInsight RAG
 
+## [1.13.0] - 2026-02-24
+### Ajouté
+- **Sprint 22 : Local Edge & Quality Boost (PBI-079, 080, 081, 082)**
+    - **PBI-079** : Intégration d'Ollama (service local) pour l'exécution de SLM souverains (Llama 3.2:3b).
+    - **PBI-080** : Extraction de métadonnées (Title/Summary) automatisée via Ollama avec filtrage proactif des sections non-pertinentes (Docling-based).
+    - **PBI-081** : Durcissement anti-hallucination ("Strict Context Adherence") et obligation de citations précises.
+    - **PBI-082** : Optimisation du Retrieval Hybride via `RELATIVE_SCORE` fusion, seuillage de reranking à 0.6 et Small-to-Big conditionnel.
+
+## 💡 LEÇONS APPRISES
+- **Souveraineté & Coût** : L'usage d'un SLM local (Llama 3.2:3b via Ollama) permet de traiter des tâches d'extraction complexes (Title/Summary) gratuitement et sans fuite de données, avec une qualité comparable aux modèles Cloud pour les métadonnées structurées.
+- **Rigueur vs Hallucination** : Imposer une réponse négative explicite ("Je ne sais pas...") dans le prompt système est le levier le plus puissant pour redresser la métrique Faithfulness, même au prix d'une légère perte de loquacité.
+- **Hybrid Tuning (Relative Score)** : La fusion par score relatif s'avère plus robuste que le Reciprocal Rank Fusion pour pondérer la sémantique et le lexical, permettant d'atteindre plus facilement les objectifs de Pertinence (>0.70).
+- **Post-processing Conditionnel** : L'activation du Small-to-Big (Window Substitution) uniquement sur les nœuds ayant un score de rerank élevé permet d'optimiser le ratio Qualité/Latence en évitant de nourrir le LLM avec du contexte large peu pertinent.
+- **Sensibilité du Reranking (Audit Note)** : L'utilisation de rerankers Cloud (Cohere) sans clé API valide (ou avec une clé expirée) peut entraîner une chute silencieuse de la pertinence, le reranker renvoyant des scores proches de zéro qui sont ensuite filtrés par les seuils de sécurité (PBI-082). Une validation proactive de la clé ou un mode fallback est recommandé pour les environnements de test.
+- **Hygiène des Tests Infra** : La création automatique de buckets S3 par le `ThesesClient` est une fonctionnalité de robustesse, mais elle nécessite une politique de cleanup stricte dans les suites de tests (ex: `fs.rm(bucket, recursive=True)` dans le `tearDown`) pour éviter la pollution de l'infrastructure de stockage.
+
 ## [1.12.0] - 2026-02-24
 ### Ajouté
 - **Sprint 21 : Clean Slate & Gold Standard (PBI-071, 072, 073, 075, 076, 077, 078)**
