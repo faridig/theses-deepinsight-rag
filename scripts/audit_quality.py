@@ -243,7 +243,7 @@ def run_audit(dataset_path=None, collection=None, mode="lab"):
                         else:
                             try:
                                 clean_scores[k] = float(v)
-                            except:
+                            except (ValueError, TypeError):
                                 clean_scores[k] = v
                     scores = clean_scores
 
