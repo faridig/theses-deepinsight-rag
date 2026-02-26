@@ -81,10 +81,19 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-076** | **[TECH] Activation & Correction de Context Precision** | Re-câblage de `ground_truth.json` + Affichage Context Precision dans le Cockpit. | DONE | CRITIQUE |
 | **PBI-077** | **[ADMIN] Sourcing Check (Prévisualisation)** | Affichage d'un tableau récapitulatif (Titres/Années) avant de déclencher l'ingestion massive. | DONE | MOYENNE |
 | **PBI-078** | **[UX/ADMIN] Visualisation du Flux (Architecture View)** | Ajout d'un onglet pédagogique montrant le parcours d'une thèse (Parsing -> SLM -> Qdrant). | DONE | MOYENNE |
-| **PBI-079** | **[TECH] Infra SLM Local (Ollama/vLLM)** | Intégration d'un service de LLM local (Llama 3.2) dans Docker pour les tâches asynchrones. | IN_PROGRESS | HAUTE |
-| **PBI-080** | **[TECH] Handoff Métadonnées SLM** | Migration de `TitleExtractor` et `SummaryExtractor` vers le LLM local pour supprimer les coûts d'ingestion. | IN_PROGRESS | HAUTE |
-| **PBI-081** | **[QUALITÉ] Durcissement Prompt & Anti-Hallucination** | Révision du System Prompt pour forcer la citation stricte et interdire les connaissances externes. | IN_PROGRESS | CRITIQUE |
-| **PBI-082** | **[QUALITÉ] Optimisation Retrieval Hybride & Reranking** | Réglage alpha (0.7), fusion `relative_score` et seuil de score Cohere (>0.6) pour remonter la Pertinence. | IN_PROGRESS | CRITIQUE |
+| **PBI-079** | **[TECH] Infra SLM Local (Ollama/vLLM)** | Intégration d'un service de LLM local (Llama 3.2) dans Docker pour les tâches asynchrones. | DONE | HAUTE |
+| **PBI-080** | **[TECH] Handoff Métadonnées SLM** | Migration de `TitleExtractor` et `SummaryExtractor` vers le LLM local pour supprimer les coûts d'ingestion. | DONE | HAUTE |
+| **PBI-081** | **[QUALITÉ] Durcissement Prompt & Anti-Hallucination** | Révision du System Prompt pour forcer la citation stricte et interdire les connaissances externes. | DONE | CRITIQUE |
+| **PBI-082** | **[QUALITÉ] Optimisation Retrieval Hybride & Reranking** | Réglage alpha (0.7), fusion `relative_score` et seuil de score Cohere (>0.6) pour remonter la Pertinence. | DONE | CRITIQUE |
+| **PBI-090** | **[ADMIN] Datasets de Vérité Thématiques** | Isolation des `ground_truth_{theme}.json` pour des tests indépendants par domaine. | IN_PROGRESS | HAUTE |
+| **PBI-091** | **[ADMIN] Moteur d'Audit Dual (Trigger Mixte)** | Audit sur dataset (Lab) vs traces (Terrain). Déclenchement hybride : Automatique (Nightly) pour les tendances et Manuel (UI) pour le diagnostic. | IN_PROGRESS | HAUTE |
+| **PBI-092** | **[UX/ADMIN] Vue Comparative & Benchmarking** | Tableau de bord centralisé inter-thèmes. Inclut des descriptions didactiques des modes d'audit (Auto vs Manuel). | IN_PROGRESS | CRITIQUE |
+| **PBI-093** | **[UX/ADMIN] Module d'Interprétation Intelligente** | Traduction des metrics en langage naturel, conseils actionnables selon les scores et lexique hybride systématique. | IN_PROGRESS | HAUTE |
+
+| **PBI-094** | **[UX/ADMIN] Courbes de Tendance (Timeline)** | Graphiques d'évolution historique des scores par thème pour mesurer l'impact des optimisations. | PENDING | MOYENNE |
+| **PBI-095** | **[ADMIN] Traçabilité de Configuration** | Liaison automatique des scores à la version du Prompt et au modèle de LLM utilisé. | PENDING | MOYENNE |
+| **PBI-096** | **[GOUVERNANCE] Certification & Seuils** | Système de badges `CERTIFIÉ` / `QUARANTAINE` selon des seuils de metrics configurables par thème. | PENDING | HAUTE |
+| **PBI-097** | **[TECH] Sélecteur de Juge Hybride** | Option dans l'UI pour choisir entre GPT-4o-mini (Routine) et GPT-4o (Certification) comme juge. | PENDING | MOYENNE |
 
 ---
 
@@ -94,6 +103,9 @@ Tout ticket entrant en Sprint doit comporter :
 - Critères d'Acceptation (Gherkin).
 - Estimation (XS à L).
 - **Justification technologique (context7)** :
+  - **Audit** : `EvaluationDataset.from_list()` de Ragas pour le chargement dynamique des datasets thématiques depuis des JSON.
+  - **Cockpit** : `st.status` de Streamlit pour le streaming des logs `subprocess.Popen` et le suivi d'audit non-bloquant.
+  - **Dataviz** : `plotly.graph_objects.Bar` avec `barmode='group'` pour la comparaison inter-thèmes des 4 metrics clés.
   - **UI** : Utilisation de `cl.ChatSettings` avec `Select` et `TextInput` pour la gestion hybride des thèmes.
   - **Data** : `SimpleDirectoryReader` couplé à `s3fs` pour l'interaction native avec MinIO (S3).
   - **Pipeline** : `IngestionPipeline` de LlamaIndex pour l'extraction de métadonnées (`TitleExtractor`) lors du sourcing.

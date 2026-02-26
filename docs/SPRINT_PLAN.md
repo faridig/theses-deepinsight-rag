@@ -1,58 +1,62 @@
-# SPRINT PLAN N°22 : "Local Edge & Quality Boost"
+# SPRINT PLAN N°23 : "Governance & Global Oversight"
 
-**Sprint Goal** : Réduire les coûts d'ingestion via un SLM local (Ollama) et restaurer l'excellence scientifique en redressant la Fidélité (>0.85) et la Pertinence (>0.70).
+**Sprint Goal** : Industrialiser le pilotage de la qualité par thématique et rendre les metrics actionnables pour l'opérateur via le Cockpit.
 
-**Statut** : EN COURS
+**Statut** : VALIDÉ
 
 ---
 
-## 🏗️ VOLET 1 : SOUVERAINETÉ & PERFORMANCE (SLM)
+## 🏛️ VOLET 1 : GOUVERNANCE THÉMATIQUE (LAB & TERRAIN)
 
-### [PBI-079] Infra SLM Local (Ollama)
+### [PBI-090] Datasets de Vérité Thématiques
 **Priorité** : Haute | **Estimation** : M
-**User Story** : "En tant que Lead-Dev, je veux un service Ollama tournant en local dans le Docker Compose, afin de traiter les métadonnées sans dépendre du cloud."
+**User Story** : "En tant qu'Administrateur, je veux des fichiers `ground_truth_{theme}.json` séparés, afin de mesurer la précision spécifique à chaque domaine sans pollution croisée."
+**Justification context7** : Utilisation de `ragas.EvaluationDataset.from_list()` après chargement du JSON thématique pour une isolation stricte des benchs.
 **Critères d'Acceptation** :
-- [ ] Ajout du service `ollama` dans `docker-compose.yml`.
-- [ ] Téléchargement automatisé du modèle `llama3.2:3b` au démarrage.
-- [ ] Vérification de l'accès via API REST depuis le conteneur Ingestion.
+- [ ] Création d'un dossier `data/benchmarks/` pour stocker les datasets.
+- [ ] Adaptation du script d'audit pour charger le dataset correspondant au thème sélectionné (`ground_truth_{theme}.json`).
+- [ ] Mécanisme de fallback sur `ground_truth.json` si le fichier thématique est absent.
+- [ ] Validation via `pytest` que le bon dataset est chargé selon l'argument `--theme`.
 
-### [PBI-080] Handoff Métadonnées vers SLM
-**Priorité** : Haute | **Estimation** : S
-**User Story** : "En tant qu'Administrateur, je veux que l'extraction du titre et du résumé soit faite par le LLM local, afin de rendre l'ingestion massive gratuite."
+### [PBI-091] Moteur d'Audit Dual (Trigger Mixte)
+**Priorité** : Haute | **Estimation** : M
+**User Story** : "En tant qu'Opérateur, je veux déclencher un audit 'Lab' (sur dataset) ou 'Terrain' (sur traces réelles) depuis l'UI, afin de diagnostiquer rapidement une baisse de qualité."
+**Justification context7** : Utilisation du container `st.status` de Streamlit pour encapsuler le `subprocess.Popen` et streamer les logs de l'audit en temps réel.
 **Critères d'Acceptation** :
-- [ ] Remplacement de `OpenAI` par `Ollama` dans les classes `TitleExtractor` et `SummaryExtractor`.
-- [ ] Filtrage intelligent : Exclusion des sections "Remerciements/Dédicaces" via Docling.
-- [ ] Ciblage prioritaire des sections "Abstract/Résumé" (début ou fin de document) et "Conclusion".
-- [ ] Validation de la qualité des résumés produits (comparaison vs GPT-4o).
+- [ ] Ajout d'une section "Audit Qualité" dans l'onglet Admin du Cockpit (Streamlit).
+- [ ] Sélecteur de mode : "Dataset (Lab)" vs "Traces (Terrain)".
+- [ ] Lancement asynchrone du script `audit_quality.py` via `subprocess.Popen`.
+- [ ] Affichage d'une barre de progression (simulation ou logs parsés) et notification de fin.
 
 ---
 
-## 🔬 VOLET 2 : EXCELLENCE RAG (FIABILITÉ & PERTINENCE)
+## 📊 VOLET 2 : DASHBOARDING & INTERPRÉTATION
 
-### [PBI-081] Durcissement Prompt & Anti-Hallucination
-**Priorité** : Critique | **Estimation** : S
-**User Story** : "En tant que Chef d'Orchestre, je veux que le système refuse de répondre s'il n'a pas de sources, afin de remonter la Fidélité (actuellement 0.59) à >0.85."
-**Critères d'Acceptation** :
-- [ ] GIVEN une question hors-sujet.
-- [ ] WHEN le système cherche dans les sources.
-- [ ] THEN il répond "Je ne sais pas" au lieu d'inventer (Strict Context Adherence).
-- [ ] Obligation de citation formatée pour chaque affirmation.
-
-### [PBI-082] Optimisation du Retrieval Hybride & Reranking
+### [PBI-092] Vue Comparative & Benchmarking
 **Priorité** : Critique | **Estimation** : M
-**User Story** : "En tant qu'Utilisateur, je veux que les documents remontés soient plus proches de ma question, afin de remonter la Pertinence (actuellement 0.37) à >0.70."
+**User Story** : "En tant que PO, je veux voir un tableau comparatif des scores (Fidélité/Pertinence) entre tous les thèmes, afin d'identifier les domaines nécessitant un réglage de prompt spécifique."
+**Justification context7** : Bar Chart groupé via Plotly pour comparer Faithfulness, Relevancy, Precision et Recall par thématique.
 **Critères d'Acceptation** :
-- [ ] **Hybrid Tuning** : Implémentation de `relative_score_fusion` dans `QdrantVectorStore` pour une meilleure pondération.
-- [ ] **Alpha Calibration** : Fixation de `alpha=0.7` (priorité sémantique) comme base de benchmark.
-- [ ] **Cohere Thresholding** : Implémentation d'un filtre post-rerank éjectant tout nœud avec un `rank_score < 0.6`.
-- [ ] **Multi-Query Safety** : Réduction de la température à `0.1` pour le `QueryTransform` et durcissement du prompt de réécriture pour éviter le "Semantic Drift".
-- [ ] **Small-to-Big Retrieval** : Activation de la substitution de fenêtre (Window Substitution) uniquement si le score de rerank est élevé.
+- [ ] Implémentation d'une vue "Global Overview" dans le Cockpit.
+- [ ] Graphique Plotly (Grouped Bar Chart) comparant les 4 metrics Ragas (Faithfulness, Relevancy, Context Precision, Context Recall) par thème.
+- [ ] Tableau de bord récapitulatif montrant le "Thème le plus performant" et le "Thème en alerte".
+
+### [PBI-093] Module d'Interprétation Intelligente
+**Priorité** : Haute | **Estimation** : S
+**User Story** : "En tant qu'Utilisateur non-technique, je veux une explication textuelle de ce que signifie un score de 0.6, afin de savoir si le système est prêt pour la production."
+**Critères d'Acceptation** :
+- [ ] Mapping des scores en labels :
+    - < 0.4 : "CRITIQUE - Amélioration du prompt nécessaire"
+    - 0.4 - 0.7 : "ACCEPTABLE - Vérifier la précision du parsing"
+    - \> 0.7 : "EXCELLENT - Prêt pour la production"
+- [ ] Affichage de ces conseils actionnables directement sous les graphiques de metrics dans Streamlit.
+- [ ] Lexique interactif expliquant chaque métrique Ragas en français simple.
 
 ---
 
-## 🏛️ JOURNAL DES DÉCISIONS (Sprint 22)
-- **DÉCISION 22.1** : Adoption de `llama3.2:3b` comme SLM de référence pour les tâches d'extraction structurée (Title/Summary).
-- **DÉCISION 22.2** : Priorité absolue à la Fidélité sur la loquacité : le système doit préférer une réponse courte et sourcée à une synthèse longue potentiellement hallucinogène.
+## 🏛️ JOURNAL DES DÉCISIONS (Sprint 23)
+- **DÉCISION 23.1** : Adoption d'un stockage structuré par dossier `data/benchmarks/{theme}/` pour les référentiels de vérité.
+- **DÉCISION 23.2** : Standardisation du mode d'audit dual (Lab vs Terrain) pour séparer l'évaluation "période de dev" (dataset fixe) de l'évaluation "vie réelle" (traces utilisateurs).
 
 ---
 **PLANNING VALIDÉ. À TOI LEAD-DEV.**

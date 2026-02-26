@@ -9,7 +9,6 @@ from llama_index.core import (
     Settings,
     PromptTemplate,
 )
-from llama_index.core.postprocessor import MetadataReplacementPostProcessor
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 

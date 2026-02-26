@@ -15,6 +15,24 @@ def s3_config():
         "bucket": "test-storage-bucket"
     }
 
+@pytest.fixture(autouse=True)
+def s3_cleanup(s3_config):
+    """Garantit le nettoyage du bucket après chaque test (PBI-Review: Hygiène S3)."""
+    yield
+    try:
+        from s3fs import S3FileSystem
+        fs = S3FileSystem(
+            key=s3_config["key"],
+            secret=s3_config["secret"],
+            endpoint_url=s3_config["endpoint_url"],
+            use_ssl=False
+        )
+        if fs.exists(s3_config["bucket"]):
+            fs.rm(s3_config["bucket"], recursive=True)
+            print(f"\n[CLEANUP] Bucket {s3_config['bucket']} supprimé.")
+    except Exception as e:
+        print(f"\n[WARNING] Échec du nettoyage S3: {e}")
+
 @pytest.mark.asyncio
 async def test_theses_client_s3_init(s3_config):
     """Vérifie que le client s'initialise correctement avec S3."""
