@@ -230,7 +230,7 @@ def run_audit(dataset_path=None, collection=None, mode="lab"):
                         f.write(f"| {metric} | **{score:.4f}** | {status} |\n")
                 else:
                     f.write(f"| Score Global | {scores} | - |\n")
-            except Exception as e:
+            except Exception:
                 f.write(f"| Résultat | {result} | |\n")
 
             f.write("\n## ⏱️ Performance & Latence\n\n")

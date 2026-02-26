@@ -102,7 +102,7 @@ def test_legacy_fallback():
         with (
             patch("scripts.audit_quality.setup_settings"),
             patch("scripts.audit_quality.RAGEngine") as mock_engine_class,
-            patch("scripts.audit_quality.Dataset") as mock_dataset_class,
+            patch("scripts.audit_quality.Dataset"),
             patch("scripts.audit_quality.evaluate") as mock_evaluate,
         ):
             mock_engine = MagicMock()
