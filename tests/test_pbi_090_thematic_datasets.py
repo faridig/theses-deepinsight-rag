@@ -39,7 +39,7 @@ def test_load_thematic_dataset(setup_test_datasets):
     with (
         patch("scripts.audit_quality.setup_settings"),
         patch("scripts.audit_quality.RAGEngine") as mock_engine_class,
-        patch("scripts.audit_quality.Dataset") as mock_dataset_class,
+        patch("scripts.audit_quality.Dataset"),
         patch("scripts.audit_quality.evaluate") as mock_evaluate,
     ):
         # Mocking the engine and its response
@@ -67,7 +67,7 @@ def test_fallback_to_global_benchmark(setup_test_datasets):
     with (
         patch("scripts.audit_quality.setup_settings"),
         patch("scripts.audit_quality.RAGEngine") as mock_engine_class,
-        patch("scripts.audit_quality.Dataset") as mock_dataset_class,
+        patch("scripts.audit_quality.Dataset"),
         patch("scripts.audit_quality.evaluate") as mock_evaluate,
     ):
         mock_engine = MagicMock()
