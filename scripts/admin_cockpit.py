@@ -57,22 +57,37 @@ def get_all_themes_latest_metrics() -> list:
             with open(audit_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            # Extraction du thème
-            theme_match = re.search(r"\*\*Thème\*\* : `(.*?)`", content)
+            # Extraction du thème (Accent-insensitive et robuste - Correction Bloquant PBI-091)
+            theme_match = re.search(r"\*\*Th[éèe]me\*\* : `(.*?)`", content)
             theme = theme_match.group(1) if theme_match else "default"
 
             if theme not in latest_per_theme:
-                global_match = re.search(
-                    r"\| (?:Score )?Global \| (\{.*?\}) \|", content
-                )
+                # Regex plus permissive pour Score Global (support des listes et np types)
+                global_match = re.search(r"\| (?:Score )?Global \| (.*?) \|", content)
                 if global_match:
-                    scores_dict = ast.literal_eval(global_match.group(1))
-                    latest_per_theme[theme] = {
-                        "theme": theme,
-                        "file": os.path.basename(audit_path),
-                        "path": audit_path,
-                        "scores": scores_dict,
-                    }
+                    raw_val = global_match.group(1).strip()
+
+                    # Nettoyage pour literal_eval (cas np.float64 et listes)
+                    # Remplacement des types numpy par des nombres purs
+                    clean_val = re.sub(
+                        r"np\.(?:float64|float32|int64|int32)\((.*?)\)", r"\1", raw_val
+                    )
+
+                    try:
+                        scores_dict = ast.literal_eval(clean_val)
+                        # Si c'est une liste de un élément '[{...}]', on prend l'intérieur
+                        if isinstance(scores_dict, list) and len(scores_dict) > 0:
+                            scores_dict = scores_dict[0]
+
+                        if isinstance(scores_dict, dict):
+                            latest_per_theme[theme] = {
+                                "theme": theme,
+                                "file": os.path.basename(audit_path),
+                                "path": audit_path,
+                                "scores": scores_dict,
+                            }
+                    except Exception:
+                        continue
         except Exception:
             continue
 

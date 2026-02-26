@@ -222,15 +222,50 @@ def run_audit(dataset_path=None, collection=None, mode="lab"):
             f.write("| Métrique | Score | État |\n| :--- | :--- | :--- |\n")
 
             try:
-                scores = result.scores if hasattr(result, "scores") else result
+                # Normalisation des scores (PBI-091 Correction Bloquant)
+                raw_scores = result.scores if hasattr(result, "scores") else result
+
+                # Si c'est un dataset ou une liste (cas Ragas récent), on extrait le premier élément
+                if hasattr(raw_scores, "to_list"):
+                    raw_scores = raw_scores.to_list()
+
+                if isinstance(raw_scores, list) and len(raw_scores) > 0:
+                    scores = raw_scores[0]
+                else:
+                    scores = raw_scores
+
+                # Conversion systématique en float Python natif (np.float64 -> float)
                 if isinstance(scores, dict):
+                    clean_scores = {}
+                    for k, v in scores.items():
+                        if hasattr(v, "item"):  # NumPy
+                            clean_scores[k] = float(v.item())
+                        else:
+                            try:
+                                clean_scores[k] = float(v)
+                            except:
+                                clean_scores[k] = v
+                    scores = clean_scores
+
+                if isinstance(scores, dict):
+                    # On garde la ligne | Global | ... pour le cockpit admin
                     f.write(f"| Global | {scores} | - |\n")
                     for metric, score in scores.items():
-                        status = "✅" if score > 0.85 else "⚠️" if score > 0.7 else "🚨"
-                        f.write(f"| {metric} | **{score:.4f}** | {status} |\n")
+                        status = (
+                            "✅"
+                            if isinstance(score, (int, float)) and score > 0.85
+                            else "⚠️"
+                            if isinstance(score, (int, float)) and score > 0.7
+                            else "🚨"
+                        )
+                        if isinstance(score, (int, float)):
+                            f.write(f"| {metric} | **{score:.4f}** | {status} |\n")
+                        else:
+                            f.write(f"| {metric} | {score} | - |\n")
                 else:
                     f.write(f"| Score Global | {scores} | - |\n")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Erreur lors de la normalisation des scores : {e}")
                 f.write(f"| Résultat | {result} | |\n")
 
             f.write("\n## ⏱️ Performance & Latence\n\n")
