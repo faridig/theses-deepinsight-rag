@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 if BM25Retriever is None:
     logger.warning("BM25Retriever non trouvé dans llama_index.retrievers.bm25")
 if CohereRerank is None:
-    logger.warning("CohereRerank non trouvé dans llama_index.postprocessor.cohere_rerank")
+    logger.warning(
+        "CohereRerank non trouvé dans llama_index.postprocessor.cohere_rerank"
+    )
 
 # Paramètres de récupération
 RETRIEVAL_TOP_K = 10
@@ -52,11 +54,13 @@ logging.getLogger("bm25s").setLevel(logging.WARNING)
 logging.getLogger("llama_index.core.llms.utils").setLevel(logging.ERROR)
 logging.getLogger("llama_index.core.settings").setLevel(logging.ERROR)
 
+
 class ParallelMultiQueryRetriever(QueryFusionRetriever):
     """
     Version optimisée du QueryFusionRetriever utilisant asyncio.gather
     pour paralléliser les appels aux retrievers (PBI-019).
     """
+
     async def _aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         logger.info(f"Début retrieval multi-requêtes pour: {query_bundle.query_str}")
         start_time = time.time()
@@ -65,76 +69,127 @@ class ParallelMultiQueryRetriever(QueryFusionRetriever):
         logger.info(f"Fin retrieval multi-requêtes en {end_time - start_time:.2f}s")
         return res
 
+
 class NodeCleaningProcessor(BaseNodePostprocessor):
     """
     Nettoie les métadonnées techniques pour réduire la consommation de tokens (PBI-012).
     """
-    def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
+
+    def _postprocess_nodes(
+        self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None
+    ) -> List[NodeWithScore]:
         excluded_keys = [
-            "_node_content", "relationships", "file_path", "file_size", 
-            "creation_date", "last_modified_date", "original_text", 
-            "window", "doc_id", "document_id", "ref_doc_id", 
-            "_node_type", "file_type", "file_name", "ollama_summary", "extracted_title"
+            "_node_content",
+            "relationships",
+            "file_path",
+            "file_size",
+            "creation_date",
+            "last_modified_date",
+            "original_text",
+            "window",
+            "doc_id",
+            "document_id",
+            "ref_doc_id",
+            "_node_type",
+            "file_type",
+            "file_name",
+            "ollama_summary",
+            "extracted_title",
         ]
-        
+
         for node_with_score in nodes:
             node = node_with_score.node
             current_excluded = list(excluded_keys)
-            
+
             # Si on a le titre extrait via Ollama, on l'utilise
-            if "extracted_title" in node.metadata and node.metadata["extracted_title"] != "Titre non extrait":
+            if (
+                "extracted_title" in node.metadata
+                and node.metadata["extracted_title"] != "Titre non extrait"
+            ):
                 node.metadata["titre_document"] = node.metadata["extracted_title"]
 
-            if "titre" not in node.metadata and "titre_document" not in node.metadata and "file_name" in current_excluded:
+            if (
+                "titre" not in node.metadata
+                and "titre_document" not in node.metadata
+                and "file_name" in current_excluded
+            ):
                 current_excluded.remove("file_name")
-            
+
             node.excluded_llm_metadata_keys = current_excluded
             node.metadata_template = "{key} : {value}"
-            
+
             if isinstance(node, TextNode):
-                node.text_template = "THÈSE INFO :\n{metadata_str}\nEXTRAIT :\n{content}\n"
-            
+                node.text_template = (
+                    "THÈSE INFO :\n{metadata_str}\nEXTRAIT :\n{content}\n"
+                )
+
             if "page_label" not in node.metadata:
                 node.metadata["page_label"] = "N/A"
-                
+
         return nodes
+
 
 class CohereThresholdPostprocessor(BaseNodePostprocessor):
     """
     Filtre les nœuds ayant un score de reranking trop faible (PBI-082).
     """
+
     threshold: float = 0.6
 
-    def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
+    def _postprocess_nodes(
+        self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None
+    ) -> List[NodeWithScore]:
         # On ne filtre que si les nœuds ont été rerankés (le score est généralement normalisé par Cohere)
-        return [node for node in nodes if node.score >= self.threshold]
+        filtered_nodes = [
+            node
+            for node in nodes
+            if node.score is not None and node.score >= self.threshold
+        ]
+        logger.info(
+            f"[PBI-100] Post-filtering: {len(nodes)} nodes in, {len(filtered_nodes)} nodes out (Threshold={self.threshold})"
+        )
+        return filtered_nodes
+
 
 class ConditionalWindowReplacementProcessor(BaseNodePostprocessor):
     """
     Remplace le texte du nœud par sa fenêtre contextuelle seulement si le score est élevé (PBI-082).
     Cela permet de garder de la précision sur les résultats moyens et du contexte sur les excellents.
     """
+
     threshold: float = 0.7
     target_metadata_key: str = "window"
 
-    def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
+    def _postprocess_nodes(
+        self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None
+    ) -> List[NodeWithScore]:
         for node_with_score in nodes:
-            if node_with_score.score >= self.threshold:
+            if (
+                node_with_score.score is not None
+                and node_with_score.score >= self.threshold
+            ):
                 node = node_with_score.node
                 window_text = node.metadata.get(self.target_metadata_key)
                 if window_text:
                     node.set_content(window_text)
         return nodes
 
+
 class DiversityPostprocessor(BaseNodePostprocessor):
     """
-    Assure la diversité des sources tout en permettant plusieurs extraits 
+    Assure la diversité des sources tout en permettant plusieurs extraits
     par document si la pertinence est élevée (PBI-015/Review).
     """
+
     target_top_n: int = 5
     max_per_doc: int = 2
 
-    def __init__(self, target_top_n: Optional[int] = None, max_per_doc: Optional[int] = None, **kwargs):
+    def __init__(
+        self,
+        target_top_n: Optional[int] = None,
+        max_per_doc: Optional[int] = None,
+        **kwargs,
+    ):
         """
         Initialise le post-processeur avec des paramètres optionnels.
         """
@@ -144,39 +199,49 @@ class DiversityPostprocessor(BaseNodePostprocessor):
         if max_per_doc is not None:
             self.max_per_doc = max_per_doc
 
-    def _postprocess_nodes(self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None) -> List[NodeWithScore]:
+    def _postprocess_nodes(
+        self, nodes: List[NodeWithScore], query_bundle: Optional[QueryBundle] = None
+    ) -> List[NodeWithScore]:
         doc_counts = {}
         filtered_nodes = []
-        
+
         for node_with_score in nodes:
-            doc_id = node_with_score.node.metadata.get("titre") or \
-                     node_with_score.node.metadata.get("file_name") or \
-                     node_with_score.node.node_id
-            
+            doc_id = (
+                node_with_score.node.metadata.get("titre")
+                or node_with_score.node.metadata.get("file_name")
+                or node_with_score.node.node_id
+            )
+
             count = doc_counts.get(doc_id, 0)
             if count < self.max_per_doc:
                 filtered_nodes.append(node_with_score)
                 doc_counts[doc_id] = count + 1
-            
+
             if len(filtered_nodes) >= self.target_top_n:
                 break
-                
+
         return filtered_nodes
+
 
 class RAGEngine:
     """
     Moteur RAG multi-collections pour l'isolation des thèses par domaine (PBI-023).
     """
-    def __init__(self, storage_path: str = "./storage/qdrant", collection_name: str = "theses-default"):
+
+    def __init__(
+        self,
+        storage_path: str = "./storage/qdrant",
+        collection_name: str = "theses-default",
+    ):
         # 1. Configuration globale (Lazy & Respectful of existing settings/mocks)
         setup_settings()
-        
+
         self.storage_path = storage_path
         self.default_collection = collection_name
         self._query_engines: Dict[str, RetrieverQueryEngine] = {}
         self._shared_vector_service: Optional[VectorService] = None
-        self.index_ref = None 
-        
+        self.index_ref = None
+
         # Initialisation paresseuse du reranker
         self.reranker = None
         cohere_api_key = os.getenv("COHERE_API_KEY")
@@ -185,7 +250,7 @@ class RAGEngine:
                 self.reranker = CohereRerank(
                     api_key=cohere_api_key,
                     model="rerank-multilingual-v3.0",
-                    top_n=RETRIEVAL_TOP_K
+                    top_n=RETRIEVAL_TOP_K,
                 )
             except Exception as e:
                 logger.warning(f"Échec de l'initialisation de CohereRerank: {e}")
@@ -230,18 +295,17 @@ class RAGEngine:
         """
         if self._shared_vector_service is None:
             self._shared_vector_service = VectorService(
-                storage_path=self.storage_path, 
-                collection_name=collection_name
+                storage_path=self.storage_path, collection_name=collection_name
             )
             return self._shared_vector_service
-        
+
         # Si on change de collection mais qu'on garde le même storage_path (client)
         # on crée une nouvelle instance de VectorService partageant le même client
         return VectorService(
             storage_path=self.storage_path,
             collection_name=collection_name,
             client=self._shared_vector_service.client,
-            aclient=self._shared_vector_service.aclient
+            aclient=self._shared_vector_service.aclient,
         )
 
     def _get_query_engine(self, collection_name: str) -> RetrieverQueryEngine:
@@ -250,29 +314,34 @@ class RAGEngine:
         """
         if collection_name in self._query_engines:
             return self._query_engines[collection_name]
-        
-        logger.info(f"Initialisation du QueryEngine pour la collection : {collection_name}")
-        
+
+        logger.info(
+            f"Initialisation du QueryEngine pour la collection : {collection_name}"
+        )
+
         vector_service = self._get_vector_service(collection_name)
-        
+
         # Gestion du mode dégradé (PBI-Review)
         if not vector_service.available:
-            logger.error(f"Impossible de créer le QueryEngine pour {collection_name} : VectorService indisponible.")
-            raise RuntimeError(f"Base de données (Qdrant) injoignable pour la collection '{collection_name}'.")
+            logger.error(
+                f"Impossible de créer le QueryEngine pour {collection_name} : VectorService indisponible."
+            )
+            raise RuntimeError(
+                f"Base de données (Qdrant) injoignable pour la collection '{collection_name}'."
+            )
 
         index = vector_service.index
         self.index_ref = index
-        
+
         # Vector Retriever
         vector_retriever = index.as_retriever(similarity_top_k=RETRIEVAL_TOP_K)
-        
+
         # BM25 Retriever
         try:
             nodes = vector_service.get_all_nodes()
             if nodes and BM25Retriever:
                 bm25_retriever = BM25Retriever.from_defaults(
-                    nodes=list(nodes),
-                    similarity_top_k=RETRIEVAL_TOP_K
+                    nodes=list(nodes), similarity_top_k=RETRIEVAL_TOP_K
                 )
                 retrievers = [vector_retriever, bm25_retriever]
             else:
@@ -286,51 +355,56 @@ class RAGEngine:
         has_openai_key = bool(os.getenv("OPENAI_API_KEY"))
         is_test = os.getenv("IS_TESTING") == "1" or "pytest" in sys.modules
         num_queries = 3 if (has_openai_key or is_test) else 1
-        
+
         # PBI-082: Configuration du LLM pour la transformation de requête avec T=0.1
         query_gen_llm = None
         if has_openai_key:
             from llama_index.llms.openai import OpenAI
+
             query_gen_llm = OpenAI(model="gpt-4o-mini", temperature=0.1)
 
         fusion_retriever = ParallelMultiQueryRetriever(
             retrievers,
             similarity_top_k=RETRIEVAL_TOP_K,
             num_queries=num_queries,
-            mode=FUSION_MODES.RELATIVE_SCORE, # PBI-082: Hybrid Tuning
-            retriever_weights=[0.7, 0.3] if len(retrievers) > 1 else [1.0], # Alpha Calibration
-            use_async=vector_service.aclient is not None and not isinstance(vector_service.aclient, (str, type(None))),
+            mode=FUSION_MODES.RELATIVE_SCORE,  # PBI-082: Hybrid Tuning
+            retriever_weights=[0.7, 0.3]
+            if len(retrievers) > 1
+            else [1.0],  # Alpha Calibration
+            use_async=vector_service.aclient is not None
+            and not isinstance(vector_service.aclient, (str, type(None))),
             verbose=False,
-            llm=query_gen_llm or Settings.llm
+            llm=query_gen_llm or Settings.llm,
         )
-        
+
         # Hack pour le wrapper AsyncQdrantLocalWrapper (qui n'est pas une instance d'AsyncQdrantClient)
         if hasattr(vector_service.aclient, "_client"):
-            fusion_retriever.use_async = False # On force sync pour le wrapper local
+            fusion_retriever.use_async = False  # On force sync pour le wrapper local
 
         # Query Engine
-        all_post_processors = [
-            NodeCleaningProcessor(), # PBI-012
+        all_post_processors: List[BaseNodePostprocessor] = [
+            NodeCleaningProcessor(),  # PBI-012
         ]
-        
+
         if self.reranker:
             all_post_processors.append(self.reranker)
-            all_post_processors.append(CohereThresholdPostprocessor(threshold=0.6)) # PBI-082
-        
+            all_post_processors.append(
+                CohereThresholdPostprocessor(threshold=0.6)
+            )  # PBI-082
+
         # PBI-082: Small-to-Big Retrieval conditionnel
         all_post_processors.append(ConditionalWindowReplacementProcessor(threshold=0.7))
-        
+
         all_post_processors.append(DiversityPostprocessor(target_top_n=3))
-        
+
         query_engine = RetrieverQueryEngine(
-            retriever=fusion_retriever,
-            node_postprocessors=all_post_processors
+            retriever=fusion_retriever, node_postprocessors=all_post_processors
         )
-        
+
         query_engine.update_prompts(
             {"response_synthesizer:text_qa_template": self.qa_prompt_tmpl}
         )
-        
+
         self._query_engines[collection_name] = query_engine
         return query_engine
 
@@ -346,56 +420,81 @@ class RAGEngine:
         """
         if not question or not question.strip():
             return "Veuillez poser une question valide."
-        
+
         theme_slug = theme if theme else self.default_collection
-        
+
         # Robustesse : s'assurer que le nom de la collection commence par 'theses-' (PBI-023)
-        if theme_slug and not theme_slug.startswith("theses-") and theme_slug != ":memory:":
+        if (
+            theme_slug
+            and not theme_slug.startswith("theses-")
+            and theme_slug != ":memory:"
+        ):
             collection_name = f"theses-{theme_slug}"
         else:
             collection_name = theme_slug
-        
+
         try:
             query_engine = self._get_query_engine(collection_name)
             start_time = time.time()
-            
+
             use_async = getattr(query_engine.retriever, "use_async", False)
             if use_async:
                 response = await query_engine.aquery(question)
             else:
                 response = await asyncio.to_thread(query_engine.query, question)
-                
+
             end_time = time.time()
-            logger.info(f"Temps total aquery ({collection_name}): {end_time - start_time:.2f}s")
-            
+            logger.info(
+                f"Temps total aquery ({collection_name}): {end_time - start_time:.2f}s"
+            )
+
             if isinstance(response, Response) and response.source_nodes:
                 sources_text = "\n\nSources :"
                 unique_sources = set()
                 for node in response.source_nodes:
                     metadata = node.metadata
-                    title = metadata.get("titre") or metadata.get("file_name") or "Thèse Inconnue"
+                    title = (
+                        metadata.get("titre")
+                        or metadata.get("file_name")
+                        or "Thèse Inconnue"
+                    )
                     author = metadata.get("auteur", "Auteur Inconnu")
                     source_id = f"- {title} ({author})"
                     if source_id not in unique_sources:
                         unique_sources.add(source_id)
                         sources_text += f"\n{source_id}"
-                
+
                 if response.response:
                     response.response += sources_text
-                
+
+            # PBI-100: Gestion de la réponse vide ou absence de sources
+            if not response.response or not response.source_nodes:
+                default_msg = "Je ne trouve pas d'information pertinente dans les thèses de ce domaine."
+                if not response.response:
+                    response.response = default_msg
+                else:
+                    # On a une réponse du LLM mais pas de sources valides (étrange mais possible)
+                    # ou le LLM dit "Je ne sais pas"
+                    if "Je ne sais pas" in response.response:
+                        response.response = default_msg
+
             return response
+
         except Exception as e:
             error_msg = str(e)
-            if "injoignable" in error_msg.lower() or "connection refused" in error_msg.lower() or "unavailable" in error_msg.lower():
+            if (
+                "injoignable" in error_msg.lower()
+                or "connection refused" in error_msg.lower()
+                or "unavailable" in error_msg.lower()
+            ):
                 friendly_msg = "Désolé, la base de données de thèses est actuellement inaccessible. Veuillez réessayer plus tard ou contacter un administrateur."
             else:
                 friendly_msg = f"Une erreur est survenue lors du traitement de votre question : {e}"
-                
-            logger.error(f"Erreur lors de la génération de la réponse pour {collection_name} : {e}")
-            return Response(
-                response=friendly_msg, 
-                source_nodes=[]
+
+            logger.error(
+                f"Erreur lors de la génération de la réponse pour {collection_name} : {e}"
             )
+            return Response(response=friendly_msg, source_nodes=[])
 
     def get_available_themes(self) -> List[str]:
         """

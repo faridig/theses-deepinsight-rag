@@ -1,62 +1,49 @@
-# SPRINT PLAN N°23 : "Governance & Global Oversight"
+# SPRINT PLAN N°24 : "Robustness & Local Intelligence"
 
-**Sprint Goal** : Industrialiser le pilotage de la qualité par thématique et rendre les metrics actionnables pour l'opérateur via le Cockpit.
+**Sprint Goal** : Résoudre l'incident de "Réponse Vide" (Empty Response) et intégrer Ollama comme moteur de génération alternatif pour la souveraineté.
 
-**Statut** : VALIDÉ
-
----
-
-## 🏛️ VOLET 1 : GOUVERNANCE THÉMATIQUE (LAB & TERRAIN)
-
-### [PBI-090] Datasets de Vérité Thématiques
-**Priorité** : Haute | **Estimation** : M
-**User Story** : "En tant qu'Administrateur, je veux des fichiers `ground_truth_{theme}.json` séparés, afin de mesurer la précision spécifique à chaque domaine sans pollution croisée."
-**Justification context7** : Utilisation de `ragas.EvaluationDataset.from_list()` après chargement du JSON thématique pour une isolation stricte des benchs.
-**Critères d'Acceptation** :
-- [ ] Création d'un dossier `data/benchmarks/` pour stocker les datasets.
-- [ ] Adaptation du script d'audit pour charger le dataset correspondant au thème sélectionné (`ground_truth_{theme}.json`).
-- [ ] Mécanisme de fallback sur `ground_truth.json` si le fichier thématique est absent.
-- [ ] Validation via `pytest` que le bon dataset est chargé selon l'argument `--theme`.
-
-### [PBI-091] Moteur d'Audit Dual (Trigger Mixte)
-**Priorité** : Haute | **Estimation** : M
-**User Story** : "En tant qu'Opérateur, je veux déclencher un audit 'Lab' (sur dataset) ou 'Terrain' (sur traces réelles) depuis l'UI, afin de diagnostiquer rapidement une baisse de qualité."
-**Justification context7** : Utilisation du container `st.status` de Streamlit pour encapsuler le `subprocess.Popen` et streamer les logs de l'audit en temps réel.
-**Critères d'Acceptation** :
-- [ ] Ajout d'une section "Audit Qualité" dans l'onglet Admin du Cockpit (Streamlit).
-- [ ] Sélecteur de mode : "Dataset (Lab)" vs "Traces (Terrain)".
-- [ ] Lancement asynchrone du script `audit_quality.py` via `subprocess.Popen`.
-- [ ] Affichage d'une barre de progression (simulation ou logs parsés) et notification de fin.
+**Statut** : VALIDÉ (Validé par le Chef d'Orchestre)
 
 ---
 
-## 📊 VOLET 2 : DASHBOARDING & INTERPRÉTATION
+## 🏛️ VOLET 1 : DIAGNOSTIC & RÉPARATION (RAG ENGINE)
 
-### [PBI-092] Vue Comparative & Benchmarking
+### [PBI-100] Debug & Fix Empty Response
 **Priorité** : Critique | **Estimation** : M
-**User Story** : "En tant que PO, je veux voir un tableau comparatif des scores (Fidélité/Pertinence) entre tous les thèmes, afin d'identifier les domaines nécessitant un réglage de prompt spécifique."
-**Justification context7** : Bar Chart groupé via Plotly pour comparer Faithfulness, Relevancy, Precision et Recall par thématique.
+**User Story** : "En tant qu'Utilisateur, je veux recevoir une réponse claire même si le système ne trouve rien, afin de ne pas rester face à un écran vide."
+**Justification context7** : Utilisation de `default_response` dans `get_response_synthesizer()` ou vérification des scores post-reranking avant synthèse.
 **Critères d'Acceptation** :
-- [ ] Implémentation d'une vue "Global Overview" dans le Cockpit.
-- [ ] Graphique Plotly (Grouped Bar Chart) comparant les 4 metrics Ragas (Faithfulness, Relevancy, Context Precision, Context Recall) par thème.
-- [ ] Tableau de bord récapitulatif montrant le "Thème le plus performant" et le "Thème en alerte".
+- [ ] Identification de la cause de l'absence de réponse (Seuil `CohereThresholdPostprocessor` à 0.6 ou retrieval vide).
+- [ ] Ajout de logs détaillés sur le nombre de nœuds post-processing.
+- [ ] Implémentation d'une réponse par défaut "Je ne trouve pas d'information pertinente dans les thèses de ce domaine." au lieu de rien.
+- [ ] Test de régression : simuler une question hors-sujet et vérifier le message.
 
-### [PBI-093] Module d'Interprétation Intelligente
-**Priorité** : Haute | **Estimation** : S
-**User Story** : "En tant qu'Utilisateur non-technique, je veux une explication textuelle de ce que signifie un score de 0.6, afin de savoir si le système est prêt pour la production."
+### [PBI-102] Robustesse & Feedback "No Sources"
+**Priorité** : Moyenne | **Estimation** : S
+**User Story** : "En tant qu'Utilisateur, je veux que l'UI m'informe explicitement si la recherche n'a retourné aucun document."
 **Critères d'Acceptation** :
-- [ ] Mapping des scores en labels :
-    - < 0.4 : "CRITIQUE - Amélioration du prompt nécessaire"
-    - 0.4 - 0.7 : "ACCEPTABLE - Vérifier la précision du parsing"
-    - \> 0.7 : "EXCELLENT - Prêt pour la production"
-- [ ] Affichage de ces conseils actionnables directement sous les graphiques de metrics dans Streamlit.
-- [ ] Lexique interactif expliquant chaque métrique Ragas en français simple.
+- [ ] Modification de `main_ui.py` pour gérer le cas `response.source_nodes` vide.
+- [ ] Envoi d'un `cl.Message` spécifique expliquant qu'aucune source n'est disponible.
 
 ---
 
-## 🏛️ JOURNAL DES DÉCISIONS (Sprint 23)
-- **DÉCISION 23.1** : Adoption d'un stockage structuré par dossier `data/benchmarks/{theme}/` pour les référentiels de vérité.
-- **DÉCISION 23.2** : Standardisation du mode d'audit dual (Lab vs Terrain) pour séparer l'évaluation "période de dev" (dataset fixe) de l'évaluation "vie réelle" (traces utilisateurs).
+## ⚙️ VOLET 2 : SOUVERAINETÉ (HYBRID LLM)
+
+### [PBI-101] Moteur LLM Hybride (OpenAI/Ollama)
+**Priorité** : Haute | **Estimation** : M
+**User Story** : "En tant que PO, je veux pouvoir basculer sur un LLM local (Ollama) si OpenAI est indisponible ou pour des raisons de coût/confidentialité."
+**Justification context7** : Utilisation du module `llama_index.llms.ollama` configuré via `src/config.py`.
+**Critères d'Acceptation** :
+- [ ] Ajout d'une variable `USE_LOCAL_LLM=1` dans `.env`.
+- [ ] Mise à jour de `src/config.py` pour initialiser `Settings.llm` avec `Ollama(model="llama3.2:3b")` si activé.
+- [ ] Vérification que les prompts de rigueur scientifique (Strict Context Adherence) sont supportés par le modèle local.
+- [ ] Monitoring Phoenix : vérifier que les traces indiquent bien l'usage d'Ollama.
+
+---
+
+## 🏛️ JOURNAL DES DÉCISIONS (Sprint 24)
+- **DÉCISION 24.1** : Le seuil de reranking de 0.6 (Cohere) sera assoupli à 0.4 en cas de "réponse vide" récurrente si la qualité reste acceptable.
+- **DÉCISION 24.2** : Ollama (Llama 3.2:3b) devient le modèle de fallback recommandé pour l'usage local.
 
 ---
 **PLANNING VALIDÉ. À TOI LEAD-DEV.**

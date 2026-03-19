@@ -9,34 +9,25 @@ Le schéma ci-dessous détaille les trois phases du pipeline : Ingestion, Indexa
 ```mermaid
 graph TD
     subgraph "1. Ingestion"
-        RAW["📄 PDF"] -->|Docling GPU| MD["📝 Markdown"]
-        MD -->|SLM| META["🏷️ Métadonnées Enrichies"]
-        MD & META -->|Archivage| S3["🪣 MinIO S3"]
+        RAW[📄 PDF] -->|SimpleReader| DOCS[📄 Documents]
+        DOCS -->|Pipeline| SPLIT[✂️ Splitter]
+        SPLIT -->|SLM Local| META[🏷️ MetadataProcessor]
+        META -->|Archivage| S3[🪣 MinIO S3]
     end
     subgraph "2. Indexation"
-        META -->|Embedding| EMB["🔢 text-embedding-3"]
-        EMB -->|Vecteurs Int8| QDR["🔍 Qdrant"]
-        META -->|Text Index| BM25["🗂️ BM25s"]
+        META -->|Embedding| EMB[🔢 text-embedding-3]
+        EMB -->|Vecteurs Int8| QDR[🔍 Qdrant]
+        DOCS -->|Text Index| BM25[🗂️ BM25s]
     end
     subgraph "3. Moteur RAG"
-        User["👤 Utilisateur"] -->|Query Expansion| MQ["🔄 Multi-Query"]
-        MQ --> V_RET["🔍 Vector Search"] & T_RET["🔍 BM25"]
-        V_RET & T_RET -->|RRF Fusion| FUSION["⚖️ Fusion"]
-        FUSION --> W_SUB["🪟 Window Substitution"] --> RERANK["💎 Cohere Rerank v3"]
-        RERANK --> DIV["🎭 Diversity Filter"] --> LLM["🤖 GPT-4o-mini"]
-        LLM --> Final["✅ Réponse Sourcée"]
+        User[👤 User] -->|Query| MQ[🔄 Multi-Query]
+        MQ --> V_RET[🔍 Vector Search] & T_RET[🔍 BM25]
+        V_RET & T_RET -->|Relative Fusion| FUSION[⚖️ Fusion]
+        FUSION --> RERANK[💎 Cohere Rerank v3]
+        RERANK --> THR[🛡️ Threshold Filter]
+        THR --> W_SUB[🪟 Window Sub] --> DIV[🎭 Diversity] --> LLM[🤖 GPT-4o-mini]
+        LLM --> Final[✅ Réponse Certifiée]
     end
-
-    %% Styles
-    classDef ingestion fill:#fdf2f2,stroke:#f87171,stroke-width:2px;
-    classDef indexation fill:#eff6ff,stroke:#60a5fa,stroke-width:2px;
-    classDef rag fill:#f0fdf4,stroke:#4ade80,stroke-width:2px;
-    classDef tool fill:#2563eb,stroke:#1e40af,stroke-width:1px,color:#fff;
-
-    class RAW,MD,META,S3 ingestion;
-    class EMB,QDR,BM25 indexation;
-    class MQ,V_RET,T_RET,FUSION,W_SUB,RERANK,DIV,LLM,Final rag;
-    class User tool;
 ```
 
 ## 🛠️ Détails des Composants & Expertise Technique

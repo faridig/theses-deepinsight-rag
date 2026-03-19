@@ -1,5 +1,21 @@
 # Changelog - Theses-DeepInsight RAG
 
+## 💡 LEÇONS APPRISES
+- **Audit Dual Lab/Terrain** : L'implémentation d'un mode "Terrain" exploitant les traces réelles d'Arize Phoenix permet d'évaluer la qualité du RAG sur des questions utilisateurs imprévues, complétant ainsi les benchmarks fixes ("Lab") pour une vision à 360°.
+- **Observabilité Streamlit** : Le streaming des logs en temps réel via `st.status` et `subprocess.Popen` transforme une boîte noire technique en une expérience transparente pour l'opérateur, facilitant le diagnostic immédiat sans accès terminal.
+- **Gouvernance Comparative** : La centralisation des scores de tous les thèmes dans une vue comparative Plotly permet d'identifier instantanément les domaines sous-performants (ex: Faithfulness < 0.70) et de prioriser les interventions de curation de données.
+- **Idempotence des Datasets** : La recherche hiérarchique des fichiers de vérité (`ground_truth_{theme}.json`) assure que chaque domaine peut avoir ses propres critères d'excellence tout en conservant un fallback global pour la stabilité du système.
+- **Robustesse des Rapports** : L'intégration de librairies tierces (Ragas/NumPy) nécessite une couche de normalisation des types natifs (float/int) avant toute sérialisation Markdown/JSON pour garantir l'interopérabilité avec les outils de visualisation (literal_eval).
+
+## [1.14.0] - 2026-02-26
+### Ajouté
+- **Sprint 23 : Global Governance & Thematic Audit (PBI-090, 091, 092, 093)**
+    - **PBI-090** : Support natif des datasets de vérité thématiques (`ground_truth_{theme}.json`) dans le pipeline d'audit.
+    - **PBI-091** : Nouveau moteur d'audit dual (Lab vs Terrain) intégré au Cockpit avec streaming des logs via `st.status`.
+    - **PBI-092** : Vue comparative globale (Benchmarking) avec graphiques Plotly multi-thèmes dans le Dashboard.
+    - **PBI-093** : Mapping intelligent des scores en labels de qualité et lexique interactif pour l'aide à la décision.
+    - **Refactoring** : Centralisation des fonctions de lecture d'audits dans `scripts/admin_cockpit.py` pour une maintenance simplifiée.
+
 ## [1.13.0] - 2026-02-26
 ### Ajouté
 - **Sprint 22 : Local Edge & Quality Boost (PBI-079, 080, 081, 082)**

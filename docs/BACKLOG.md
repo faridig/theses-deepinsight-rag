@@ -85,10 +85,13 @@ Ce backlog centralise l'ensemble des fonctionnalités et tâches techniques néc
 | **PBI-080** | **[TECH] Handoff Métadonnées SLM** | Migration de `TitleExtractor` et `SummaryExtractor` vers le LLM local pour supprimer les coûts d'ingestion. | DONE | HAUTE |
 | **PBI-081** | **[QUALITÉ] Durcissement Prompt & Anti-Hallucination** | Révision du System Prompt pour forcer la citation stricte et interdire les connaissances externes. | DONE | CRITIQUE |
 | **PBI-082** | **[QUALITÉ] Optimisation Retrieval Hybride & Reranking** | Réglage alpha (0.7), fusion `relative_score` et seuil de score Cohere (>0.6) pour remonter la Pertinence. | DONE | CRITIQUE |
-| **PBI-090** | **[ADMIN] Datasets de Vérité Thématiques** | Isolation des `ground_truth_{theme}.json` pour des tests indépendants par domaine. | IN_PROGRESS | HAUTE |
-| **PBI-091** | **[ADMIN] Moteur d'Audit Dual (Trigger Mixte)** | Audit sur dataset (Lab) vs traces (Terrain). Déclenchement hybride : Automatique (Nightly) pour les tendances et Manuel (UI) pour le diagnostic. | IN_PROGRESS | HAUTE |
-| **PBI-092** | **[UX/ADMIN] Vue Comparative & Benchmarking** | Tableau de bord centralisé inter-thèmes. Inclut des descriptions didactiques des modes d'audit (Auto vs Manuel). | IN_PROGRESS | CRITIQUE |
-| **PBI-093** | **[UX/ADMIN] Module d'Interprétation Intelligente** | Traduction des metrics en langage naturel, conseils actionnables selon les scores et lexique hybride systématique. | IN_PROGRESS | HAUTE |
+| **PBI-090** | **[ADMIN] Datasets de Vérité Thématiques** | Isolation des `ground_truth_{theme}.json` pour des tests indépendants par domaine. | DONE | HAUTE |
+| **PBI-091** | **[ADMIN] Moteur d'Audit Dual (Trigger Mixte)** | Audit sur dataset (Lab) vs traces (Terrain). Déclenchement hybride : Automatique (Nightly) pour les tendances et Manuel (UI) pour le diagnostic. | DONE | HAUTE |
+| **PBI-092** | **[UX/ADMIN] Vue Comparative & Benchmarking** | Tableau de bord centralisé inter-thèmes. Inclut des descriptions didactiques des modes d'audit (Auto vs Manuel). | DONE | CRITIQUE |
+| **PBI-093** | **[UX/ADMIN] Module d'Interprétation Intelligente** | Traduction des metrics en langage naturel, conseils actionnables selon les scores et lexique hybride systématique. | DONE | HAUTE |
+| **PBI-100** | **[TECH] Debug & Fix Empty Response** | Investigation et correction de l'absence de réponse dans l'UI Chainlit (Seuils de Reranking/Retrieval). | PENDING | CRITIQUE |
+| **PBI-101** | **[TECH] Moteur LLM Hybride (OpenAI/Ollama)** | Support du switch dynamique entre OpenAI et Ollama (Llama 3.2:3b) via l'environnement pour une souveraineté accrue. | PENDING | HAUTE |
+| **PBI-102** | **[UX] Robustesse & Feedback "No Sources"** | Amélioration du message utilisateur lorsque aucune information n'est trouvée (plus de réponse vide). | PENDING | MOYENNE |
 
 | **PBI-094** | **[UX/ADMIN] Courbes de Tendance (Timeline)** | Graphiques d'évolution historique des scores par thème pour mesurer l'impact des optimisations. | PENDING | MOYENNE |
 | **PBI-095** | **[ADMIN] Traçabilité de Configuration** | Liaison automatique des scores à la version du Prompt et au modèle de LLM utilisé. | PENDING | MOYENNE |
